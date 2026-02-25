@@ -1,0 +1,3291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>材料成本计算系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        neutral: '#f8fafc',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        'slate-50': '#f8fafc',
+                        'slate-100': '#f1f5f9',
+                        'slate-200': '#e2e8f0',
+                        'slate-300': '#cbd5e1',
+                        'slate-400': '#94a3b8',
+                        'slate-500': '#64748b',
+                        'slate-600': '#475569',
+                        'slate-700': '#334155',
+                        'slate-800': '#1e293b',
+                        'slate-900': '#0f172a',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+                        'card-hover': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .tab-active {
+                @apply text-primary border-b-2 border-primary;
+            }
+            .input-field {
+                @apply w-full px-3 py-2 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-sm hover:bg-primary/90 transition-colors;
+            }
+            .btn-secondary {
+                @apply bg-secondary text-white px-4 py-2 rounded-sm hover:bg-secondary/90 transition-colors;
+            }
+            .btn-outline {
+                @apply border border-slate-300 text-slate-700 px-4 py-2 rounded-sm hover:bg-slate-50 transition-colors;
+            }
+            .btn-purple {
+                @apply bg-purple-600 text-white px-4 py-2 rounded-sm hover:bg-purple-700 transition-colors;
+            }
+            .table-header {
+                @apply px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider;
+            }
+            .table-cell {
+                @apply px-6 py-4 whitespace-nowrap text-sm text-slate-900;
+            }
+            .card-shadow {
+                @apply shadow-card;
+            }
+            .animate-fade-in {
+                animation: fadeIn 0.3s ease-in-out;
+            }
+            .animate-slide-in {
+                animation: slideIn 0.3s ease-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes slideIn {
+                from { transform: translateY(-20px); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            .clip-path-polygon {
+                clip-path: polygon(
+                    0% 0%, 
+                    95% 0%, 
+                    100% 5%, 
+                    100% 100%, 
+                    5% 100%, 
+                    0% 95%
+                );
+            }
+        }
+    </style>
+</head>
+<body class="bg-white min-h-screen">
+    <!-- 背景动画层 -->
+    <div id="animationBackground" class="fixed inset-0 pointer-events-none opacity-10 z-0"></div>
+    
+    <div class="container mx-auto px-4 py-8 relative z-10">
+        <!-- 头部 -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <!-- 折线装饰 -->
+                    <div class="w-10 h-10 mr-4 flex items-center justify-center">
+                        <svg viewBox="0 0 24 24" class="text-primary w-8 h-8">
+                            <polyline points="3,12 8,7 12,11 16,7 21,12" fill="none" stroke="currentColor" stroke-width="2" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold text-slate-800">材料成本计算系统</h1>
+                        <p class="text-slate-500 mt-1">高效管理原材料、半成品和成品成本</p>
+                    </div>
+                </div>
+
+
+                <div class="flex space-x-4">
+                    <!-- 调试按钮 -->
+                    <button onclick="window.resetAllData()" class="bg-danger text-white px-3 py-1 rounded-sm hover:bg-danger/90 transition-colors text-sm">
+                        重置数据
+                    <button id="recalculateAll" class="btn-purple flex items-center" onclick="window.recalculateAllPrices()">
+                        <i class="fa fa-refresh mr-2"></i> 重新计算
+                    </button>
+                    <button id="importData" class="btn-outline flex items-center" onclick="window.performImport()">
+                        <i class="fa fa-upload mr-2"></i> 导入数据
+                    </button>
+                    <button id="imageRecognition" class="btn-secondary flex items-center">
+                        <i class="fa fa-camera mr-2"></i> 图片识别
+                    </button>
+                    <button id="exportData" class="btn-primary flex items-center" onclick="window.performExport()">
+                        <i class="fa fa-download mr-2"></i> 导出数据
+                    </button>
+                </div>
+
+
+            </div>
+
+
+        </header>
+
+        <!-- 标签导航 -->
+        <nav class="mb-6 border-b border-slate-200">
+            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="tabNav" role="tablist">
+                <li class="mr-2" role="presentation">
+                    <button class="inline-block p-4 tab-active" id="rawMaterials-tab" data-tab="rawMaterials" type="button" role="tab">
+                        <i class="fa fa-cubes mr-2"></i>原材料库
+                    </button>
+                </li>
+                <li class="mr-2" role="presentation">
+                    <button class="inline-block p-4 hover:text-slate-600" id="semiFinished-tab" data-tab="semiFinished" type="button" role="tab">
+                        <i class="fa fa-cube mr-2"></i>半成品库
+                    </button>
+                </li>
+                <li class="mr-2" role="presentation">
+                    <button class="inline-block p-4 hover:text-slate-600" id="products-tab" data-tab="products" type="button" role="tab">
+                        <i class="fa fa-cube mr-2"></i>商品成本计算
+                    </button>
+                </li>
+                <li role="presentation">
+                    <button class="inline-block p-4 hover:text-slate-600" id="productSummary-tab" data-tab="productSummary" type="button" role="tab">
+                        <i class="fa fa-bar-chart mr-2"></i>商品汇总
+                    </button>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- 标签页内容 -->
+        <div class="p-0">
+            <!-- 原材料库 -->
+            <div id="rawMaterials" class="tab-content animate-fade-in">
+                <div class="grid grid-cols-12 gap-6">
+                    <!-- 表单区域 -->
+                    <div class="col-span-12 lg:col-span-4">
+                        <div class="bg-slate-50 p-6 border-l-4 border-primary shadow-card">
+                            <div class="flex items-center mb-4">
+                                <div class="w-6 h-6 mr-2">
+                                    <svg viewBox="0 0 24 24" class="text-primary">
+                                        <polyline points="5,12 10,7 19,16" fill="none" stroke="currentColor" stroke-width="2" />
+                                    </svg>
+                                </div>
+                                <h2 class="text-xl font-semibold text-slate-800">原材料信息</h2>
+                            </div>
+                            <form id="rawMaterialForm" class="space-y-4">
+                                <input type="hidden" id="rawMaterialId">
+                                <div>
+                                    <label for="rawMaterialName" class="block text-sm font-medium text-slate-700 mb-1">材料名称</label>
+                                    <input type="text" id="rawMaterialName" class="input-field" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="rawMaterialSpec" class="block text-sm font-medium text-slate-700 mb-1">规格</label>
+                                    <input type="number" id="rawMaterialSpec" class="input-field" step="0.01" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="rawMaterialUnit" class="block text-sm font-medium text-slate-700 mb-1">单位</label>
+                                    <input type="text" id="rawMaterialUnit" class="input-field" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="rawMaterialPrice" class="block text-sm font-medium text-slate-700 mb-1">价格 (元)</label>
+                                    <input type="number" id="rawMaterialPrice" class="input-field" step="0.01" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="rawMaterialYield" class="block text-sm font-medium text-slate-700 mb-1">应产率 (%)</label>
+                                    <input type="number" id="rawMaterialYield" class="input-field" step="0.01" min="0" max="100" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="rawMaterialUnitPrice" class="block text-sm font-medium text-slate-700 mb-1">单价 (元/单位)</label>
+                                    <input type="text" id="rawMaterialUnitPrice" class="input-field bg-slate-100" readonly>
+                                </div>
+
+
+                                <div class="flex space-x-3 pt-2">
+                                    <button type="submit" class="btn-primary flex-1">
+                                        <i class="fa fa-save mr-2"></i>保存
+                                    </button>
+                                    <button type="button" id="cancelRawMaterial" class="btn-outline flex-1">
+                                        <i class="fa fa-times mr-2"></i>取消
+                                    </button>
+                                </div>
+
+
+                            </form>
+                        </div>
+
+
+                    </div>
+
+
+
+                    <!-- 表格区域 -->
+                    <div class="col-span-12 lg:col-span-8">
+                        <div class="bg-white border border-slate-200 shadow-card">
+                            <div class="p-4 flex justify-between items-center border-b border-slate-200">
+                                <div class="flex items-center">
+                                    <div class="w-6 h-6 mr-2">
+                                        <svg viewBox="0 0 24 24" class="text-primary">
+                                            <polyline points="5,12 10,7 19,16" fill="none" stroke="currentColor" stroke-width="2" />
+                                        </svg>
+                                    </div>
+                                    <h2 class="text-xl font-semibold text-slate-800">原材料列表</h2>
+                                </div>
+                                <div class="relative">
+                                    <input type="text" id="rawMaterialSearch" placeholder="搜索材料名称..." class="input-field pl-10">
+                                    <i class="fa fa-search absolute left-3 top-3 text-slate-400"></i>
+                                </div>
+
+
+                            </div>
+
+
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-slate-200">
+                                    <thead class="bg-slate-50">
+                                        <tr>
+                                            <th scope="col" class="table-header">材料名称</th>
+                                            <th scope="col" class="table-header">规格</th>
+                                            <th scope="col" class="table-header">单位</th>
+                                            <th scope="col" class="table-header">总重量</th>
+                                            <th scope="col" class="table-header">价格 (元)</th>
+                                            <th scope="col" class="table-header">应产率 (%)</th>
+                                            <th scope="col" class="table-header">单价 (元/单位)</th>
+                                            <th scope="col" class="table-header">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="rawMaterialTable" class="bg-white divide-y divide-slate-200">
+                                        <!-- 数据将通过JavaScript动态填充 -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+
+                            <div id="rawMaterialEmpty" class="p-8 text-center hidden">
+                                <i class="fa fa-inbox text-4xl text-slate-300 mb-3"></i>
+                                <p class="text-slate-500">暂无原材料数据</p>
+                                <p class="text-slate-400 text-sm mt-1">请在左侧表单添加原材料信息</p>
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- 半成品库 -->
+            <div id="semiFinished" class="tab-content hidden animate-fade-in">
+                <div class="flex flex-col md:flex-row gap-6">
+                    <!-- 表单区域 -->
+                    <div class="w-full md:w-1/3">
+                        <div class="bg-neutral p-6 rounded-lg card-shadow">
+                            <h2 class="text-xl font-semibold mb-4">半成品信息</h2>
+                            <form id="semiFinishedForm" class="space-y-4">
+                                <input type="hidden" id="semiFinishedId">
+                                <div>
+                                    <label for="semiFinishedName" class="block text-sm font-medium text-gray-700 mb-1">半成品名称</label>
+                                    <input type="text" id="semiFinishedName" class="input-field" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="semiFinishedUnit" class="block text-sm font-medium text-gray-700 mb-1">单位</label>
+                                    <input type="text" id="semiFinishedUnit" class="input-field" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="semiFinishedTotalWeight" class="block text-sm font-medium text-gray-700 mb-1">总重量</label>
+                                    <input type="number" id="semiFinishedTotalWeight" class="input-field" step="0.01" required oninput="calculateSemiFinishedPrice()">
+                                </div>
+
+
+                                <div>
+                                    <label for="semiFinishedYield" class="block text-sm font-medium text-gray-700 mb-1">应产率 (%)</label>
+                                    <input type="number" id="semiFinishedYield" class="input-field" step="0.01" min="0" max="100" required oninput="calculateSemiFinishedPrice()">
+                                </div>
+
+
+                                <div>
+                                    <label for="semiFinishedTotalPrice" class="block text-sm font-medium text-gray-700 mb-1">总价格 (元)</label>
+                                    <input type="text" id="semiFinishedTotalPrice" class="input-field bg-gray-100" readonly>
+                                </div>
+
+
+                                <div>
+                                    <label for="semiFinishedUnitPrice" class="block text-sm font-medium text-gray-700 mb-1">单价 (元/单位)</label>
+                                    <input type="text" id="semiFinishedUnitPrice" class="input-field bg-gray-100" readonly>
+                                </div>
+
+
+                                <div class="flex space-x-3 pt-2">
+                                    <button type="submit" class="btn-primary flex-1">
+                                        <i class="fa fa-save mr-2"></i>保存
+                                    </button>
+                                    <button type="button" id="cancelSemiFinished" class="btn-outline flex-1">
+                                        <i class="fa fa-times mr-2"></i>取消
+                                    </button>
+                                </div>
+
+
+                            </form>
+                        </div>
+
+
+                    </div>
+
+
+
+                    <!-- 材料组成区域 -->
+                    <div class="w-full md:w-2/3">
+                        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow mb-6">
+                            <div class="p-4 border-b">
+                                <h2 class="text-xl font-semibold">原材料组成</h2>
+                            </div>
+
+
+                            <div id="semiFinishedMaterials" class="p-4">
+                                <div class="space-y-3 mb-4">
+                                    <div class="relative">
+                                        <div class="flex">
+                                            <input type="text" id="materialSearchInput" placeholder="搜索材料..." class="input-field pl-10 w-full rounded-r-none">
+                                            <button id="toggleMaterialDropdown" class="bg-gray-100 border border-gray-300 border-l-0 px-3 rounded-r-sm hover:bg-gray-200 transition-colors">
+                                                <i class="fa fa-chevron-down text-gray-500"></i>
+                                            </button>
+                                        </div>
+                                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <select id="addComponentTypeSelect" class="input-field flex-1">
+                                            <option value="">选择类型...</option>
+                                            <option value="rawMaterial">原材料</option>
+                                            <option value="semiFinished">半成品</option>
+                                        </select>
+                                        <input type="number" id="addMaterialQuantity" placeholder="数量" class="input-field flex-1" step="0.01" onkeypress="if(event.key === 'Enter') { window.addMaterialToSemiFinished(); }">
+                                        <button id="addMaterialBtn" class="btn-secondary whitespace-nowrap" onclick="window.addMaterialToSemiFinished()">
+                                            <i class="fa fa-plus"></i> 添加材料
+                                        </button>
+                                    </div>
+                                </div>
+
+
+                                <div id="searchResults" class="hidden bg-white border border-gray-200 rounded-lg max-h-60 overflow-y-auto mb-4 z-10 absolute" style="width: calc(100% - 2rem);">
+                                    <!-- 搜索结果将显示在这里 -->
+                                </div>
+
+
+                                <div id="materialsList" class="space-y-3">
+                                    <!-- 材料列表将通过JavaScript动态填充 -->
+                                </div>
+
+
+                            </div>
+
+
+                        </div>
+
+
+
+                        <!-- 半成品列表 -->
+                        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow">
+                            <div class="p-4 flex justify-between items-center border-b">
+                                <h2 class="text-xl font-semibold">半成品列表</h2>
+                                <div class="relative">
+                                    <input type="text" id="semiFinishedSearch" placeholder="搜索半成品名称..." class="input-field pl-10">
+                                    <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                                </div>
+
+
+                            </div>
+
+
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th scope="col" class="table-header">半成品名称</th>
+                                            <th scope="col" class="table-header">单位</th>
+                                            <th scope="col" class="table-header">总重量</th>
+                                            <th scope="col" class="table-header">应产率 (%)</th>
+                                            <th scope="col" class="table-header">总价格 (元)</th>
+                                            <th scope="col" class="table-header">单价 (元/单位)</th>
+                                            <th scope="col" class="table-header">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="semiFinishedTable" class="bg-white divide-y divide-gray-200">
+                                        <!-- 数据将通过JavaScript动态填充 -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+
+                            <div id="semiFinishedEmpty" class="p-8 text-center hidden">
+                                <i class="fa fa-inbox text-4xl text-gray-300 mb-3"></i>
+                                <p class="text-gray-500">暂无半成品数据</p>
+                                <p class="text-gray-400 text-sm mt-1">请在左侧表单添加半成品信息</p>
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- 商品汇总 -->
+            <div id="productSummary" class="tab-content hidden animate-fade-in">
+                <div class="bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow">
+                    <div class="p-4 flex justify-between items-center border-b">
+                        <h2 class="text-xl font-semibold">商品汇总表</h2>
+                        <div class="relative">
+                            <input type="text" id="productSummarySearch" placeholder="搜索商品名称..." class="input-field pl-10">
+                            <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="table-header">商品名称</th>
+                                    <th scope="col" class="table-header">理论成本 (元)</th>
+                                    <th scope="col" class="table-header">实际售价 (元)</th>
+                                    <th scope="col" class="table-header">毛利率 (%)</th>
+                                    <th scope="col" class="table-header">上架时间</th>
+                                    <th scope="col" class="table-header">下架时间</th>
+                                    <th scope="col" class="table-header">售卖时长</th>
+                                    <th scope="col" class="table-header">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="productSummaryTable" class="bg-white divide-y divide-gray-200">
+                                <!-- 数据将通过JavaScript动态填充 -->
+                            </tbody>
+                            <tfoot id="productSummaryFooter" class="bg-gray-50 hidden">
+                                <!-- 汇总行将通过JavaScript动态填充 -->
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div id="productSummaryEmpty" class="p-8 text-center hidden">
+                        <i class="fa fa-inbox text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-500">暂无商品数据</p>
+                        <p class="text-gray-400 text-sm mt-1">请先在成品成本计算中添加商品</p>
+                    </div>
+                </div>
+
+                <!-- 商品时间管理 -->
+                <div class="mt-6 bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow">
+                    <div class="p-4 border-b">
+                        <h2 class="text-xl font-semibold">商品时间管理</h2>
+                    </div>
+                    <div class="p-6">
+                        <div id="productTimeManagement" class="space-y-4">
+                            <!-- 时间管理表单将通过JavaScript动态填充 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 商品成本计算 -->
+            <div id="products" class="tab-content hidden animate-fade-in">
+                <div class="flex flex-col md:flex-row gap-6">
+                    <!-- 表单区域 -->
+                    <div class="w-full md:w-1/3">
+                        <div class="bg-neutral p-6 rounded-lg card-shadow">
+                            <h2 class="text-xl font-semibold mb-4">商品信息</h2>
+                            <form id="productForm" class="space-y-4">
+                                <input type="hidden" id="productId">
+                                <div>
+                                    <label for="productName" class="block text-sm font-medium text-gray-700 mb-1">商品名称</label>
+                                    <input type="text" id="productName" class="input-field" required>
+                                </div>
+
+
+                                <div>
+                                    <label for="productTotalCost" class="block text-sm font-medium text-gray-700 mb-1">总成本 (元)</label>
+                                    <input type="text" id="productTotalCost" class="input-field bg-gray-100" readonly>
+                                </div>
+
+
+                                <div>
+                                    <label for="productSuggestedPrice" class="block text-sm font-medium text-gray-700 mb-1">建议售价 (元)</label>
+                                    <input type="text" id="productSuggestedPrice" class="input-field bg-gray-100" readonly>
+                                </div>
+
+
+                                <div>
+                                    <label for="productActualPrice" class="block text-sm font-medium text-gray-700 mb-1">实际售价 (元)</label>
+                                    <input type="number" id="productActualPrice" class="input-field" step="0.01">
+                                </div>
+
+
+                                <div>
+                                    <label for="productProfitMargin" class="block text-sm font-medium text-gray-700 mb-1">毛利率 (%)</label>
+                                    <input type="text" id="productProfitMargin" class="input-field bg-gray-100" readonly>
+                                </div>
+
+
+                                <div class="flex space-x-3 pt-2">
+                                    <button type="submit" class="btn-primary flex-1">
+                                        <i class="fa fa-save mr-2"></i>保存
+                                    </button>
+                                    <button type="button" id="cancelProduct" class="btn-outline flex-1">
+                                        <i class="fa fa-times mr-2"></i>取消
+                                    </button>
+                                </div>
+
+
+                            </form>
+                        </div>
+
+
+                    </div>
+
+
+
+                    <!-- 组件组成区域 -->
+                    <div class="w-full md:w-2/3">
+                        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow mb-6">
+                            <div class="p-4 border-b">
+                                <h2 class="text-xl font-semibold">组件组成</h2>
+                            </div>
+
+
+                            <div id="productComponents" class="p-4">
+                                <div class="space-y-3 mb-4">
+                                    <div class="relative">
+                                        <div class="flex">
+                                            <input type="text" id="productComponentSearchInput" placeholder="搜索组件..." class="input-field pl-10 w-full rounded-r-none">
+                                            <button id="toggleComponentDropdown" class="bg-gray-100 border border-gray-300 border-l-0 px-3 rounded-r-sm hover:bg-gray-200 transition-colors">
+                                                <i class="fa fa-chevron-down text-gray-500"></i>
+                                            </button>
+                                        </div>
+                                        <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                                    </div>
+                                    <div class="flex items-center space-x-3">
+                                        <select id="productAddComponentTypeSelect" class="input-field flex-1">
+                                            <option value="">选择类型...</option>
+                                            <option value="rawMaterial">原材料</option>
+                                            <option value="semiFinished">半成品</option>
+                                        </select>
+                                        <input type="number" id="productAddComponentQuantity" placeholder="数量" class="input-field flex-1" step="0.01" onkeypress="if(event.key === 'Enter') { window.addComponentToProduct(); }">
+                                        <button id="productAddComponentBtn" class="btn-secondary whitespace-nowrap" onclick="window.addComponentToProduct()">
+                                            <i class="fa fa-plus"></i> 添加组件
+                                        </button>
+                                    </div>
+                                </div>
+
+
+                                <div id="productComponentSearchResults" class="hidden bg-white border border-gray-200 rounded-lg max-h-60 overflow-y-auto mb-4 z-10 absolute" style="width: calc(100% - 2rem);">
+                                    <!-- 搜索结果将显示在这里 -->
+                                </div>
+
+
+                                <div id="componentsList" class="space-y-3">
+                                    <!-- 组件列表将通过JavaScript动态填充 -->
+                                </div>
+
+
+                            </div>
+
+
+                        </div>
+
+
+
+
+
+
+
+                        <!-- 成品列表 -->
+                        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden card-shadow">
+                            <div class="p-4 flex justify-between items-center border-b">
+                                <h2 class="text-xl font-semibold">商品列表</h2>
+                                <div class="relative">
+                                    <input type="text" id="productSearch" placeholder="搜索商品名称..." class="input-field pl-10">
+                                    <i class="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+                                </div>
+
+
+                            </div>
+
+
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th scope="col" class="table-header">商品名称</th>
+                                            <th scope="col" class="table-header">总成本 (元)</th>
+                                            <th scope="col" class="table-header">组件数量</th>
+                                            <th scope="col" class="table-header">操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="productTable" class="bg-white divide-y divide-gray-200">
+                                        <!-- 数据将通过JavaScript动态填充 -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+
+                            <div id="productEmpty" class="p-8 text-center hidden">
+                                <i class="fa fa-inbox text-4xl text-gray-300 mb-3"></i>
+                                <p class="text-gray-500">暂无商品数据</p>
+                                <p class="text-gray-400 text-sm mt-1">请在左侧表单添加商品信息</p>
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- 图片识别模态框 -->
+    <div id="imageRecognitionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-4xl animate-slide-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">图片识别</h3>
+                <button id="closeImageRecognitionModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 左侧：图片上传和预览 -->
+                <div>
+                    <div class="mb-4">
+                        <label for="imageFile" class="block text-sm font-medium text-gray-700 mb-1">选择图片</label>
+                        <input type="file" id="imageFile" accept="image/*" class="input-field">
+                    </div>
+
+
+                    <div id="imagePreview" class="border-2 border-dashed border-gray-300 rounded-lg h-64 flex items-center justify-center mb-4">
+                        <div class="text-center text-gray-500">
+                            <i class="fa fa-image text-4xl mb-2"></i>
+                            <p>图片预览区域</p>
+                        </div>
+
+
+                    </div>
+
+
+                    <div class="flex justify-between">
+                        <button id="captureFromCamera" class="btn-outline">
+                            <i class="fa fa-camera mr-2"></i> 拍照
+                        </button>
+                        <button id="startRecognition" class="btn-primary">
+                            <i class="fa fa-magic mr-2"></i> 开始识别
+                        </button>
+                    </div>
+
+
+                </div>
+
+
+                <!-- 右侧：识别结果 -->
+                <div>
+                    <div class="mb-4">
+                        <h4 class="text-md font-medium text-gray-700 mb-2">识别结果</h4>
+                        <div id="recognitionProgress" class="hidden mb-4">
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium">识别进度</span>
+                                <span id="progressPercentage" class="text-sm font-medium">0%</span>
+                            </div>
+
+
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+
+
+                        </div>
+
+
+                        <div id="recognitionResult" class="border rounded-lg p-4 h-64 overflow-y-auto bg-gray-50">
+                            <p class="text-gray-500 text-center">识别结果将显示在这里</p>
+                        </div>
+
+
+                    </div>
+
+
+                    <div class="mb-4">
+                        <h4 class="text-md font-medium text-gray-700 mb-2">数据解析</h4>
+                        <div id="parsedData" class="border rounded-lg p-4 h-32 overflow-y-auto bg-gray-50">
+                            <p class="text-gray-500 text-center">解析后的数据将显示在这里</p>
+                        </div>
+
+
+                    </div>
+
+
+                    <div class="flex justify-end">
+                        <button id="importRecognizedData" class="btn-primary" disabled>
+                            <i class="fa fa-check mr-2"></i> 导入数据
+                        </button>
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- 摄像头模态框 -->
+    <div id="cameraModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl animate-slide-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">拍照</h3>
+                <button id="closeCameraModal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+
+
+            <div class="mb-4">
+                <video id="cameraVideo" class="w-full h-64 object-cover border rounded-lg" autoplay></video>
+            </div>
+
+
+            <div class="flex justify-center">
+                <button id="takePhoto" class="btn-primary">
+                    <i class="fa fa-camera mr-2"></i> 拍照
+                </button>
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // 重置所有数据（用于调试）
+        window.resetAllData = function() {
+            if (confirm('确定要重置所有数据吗？这将清除所有原材料、半成品和成品数据。')) {
+                localStorage.removeItem('rawMaterials');
+                localStorage.removeItem('semiFinishedProducts');
+                localStorage.removeItem('finishedProducts');
+                alert('数据已重置，请刷新页面');
+            }
+        };
+
+        // 全局数据存储
+        let rawMaterials = JSON.parse(localStorage.getItem('rawMaterials')) || [];
+        let semiFinishedProducts = JSON.parse(localStorage.getItem('semiFinishedProducts')) || [];
+        let products = JSON.parse(localStorage.getItem('products')) || [];
+
+        // 当前编辑的项目ID
+        let currentRawMaterialId = null;
+        let currentSemiFinishedId = null;
+        let currentProductId = null;
+
+        // 当前半成品使用的材料
+        let currentSemiFinishedMaterials = [];
+        
+        // 当前商品使用的组件
+        let currentProductComponents = [];
+
+
+
+        // 全局函数 - 编辑原材料
+        window.editRawMaterial = function(id) {
+            console.log('编辑原材料:', id);
+            const material = rawMaterials.find(m => m.id === id);
+            if (material) {
+                currentRawMaterialId = id;
+                document.getElementById('rawMaterialName').value = material.name;
+                document.getElementById('rawMaterialSpec').value = material.specification;
+                document.getElementById('rawMaterialUnit').value = material.unit;
+                document.getElementById('rawMaterialPrice').value = material.price;
+                document.getElementById('rawMaterialYield').value = material.yieldRate;
+                document.getElementById('rawMaterialUnitPrice').value = material.unitPrice.toFixed(2);
+                console.log('原材料数据已填充到表单');
+            } else {
+                console.error('找不到原材料:', id);
+                alert('找不到原材料数据');
+            }
+        };
+
+        // 全局函数 - 删除原材料
+        window.deleteRawMaterial = function(id) {
+            if (confirm('确定要删除这个原材料吗？这可能会影响使用该材料的半成品和成品。')) {
+                rawMaterials = rawMaterials.filter(m => m.id !== id);
+                localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+                renderRawMaterialsTable();
+                updateDependentPrices();
+                alert('原材料已删除');
+            }
+        };
+
+        // 全局函数 - 编辑半成品
+        window.editSemiFinished = function(id) {
+            console.log('编辑半成品:', id);
+            const product = semiFinishedProducts.find(p => p.id === id);
+            if (product) {
+                currentSemiFinishedId = id;
+                document.getElementById('semiFinishedName').value = product.name;
+                document.getElementById('semiFinishedTotalWeight').value = product.totalWeight;
+                document.getElementById('semiFinishedYield').value = product.yieldRate;
+                document.getElementById('semiFinishedTotalPrice').value = product.totalPrice.toFixed(2);
+                document.getElementById('semiFinishedUnitPrice').value = product.unitPrice.toFixed(2);
+                
+                currentSemiFinishedMaterials = [...product.materials];
+                renderSemiFinishedMaterialsList();
+                console.log('半成品数据已填充到表单');
+            } else {
+                console.error('找不到半成品:', id);
+                alert('找不到半成品数据');
+            }
+        };
+
+        // 全局函数 - 删除半成品
+        window.deleteSemiFinished = function(id) {
+            if (confirm('确定要删除这个半成品吗？这可能会影响使用该半成品的成品。')) {
+                semiFinishedProducts = semiFinishedProducts.filter(p => p.id !== id);
+                localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+                renderSemiFinishedTable();
+                updateFinishedProductsUsingSemiFinished();
+                alert('半成品已删除');
+            }
+        };
+
+        // 全局函数 - 编辑商品
+        window.editProduct = function(id) {
+            console.log('编辑商品:', id);
+            const product = products.find(p => p.id === id);
+            if (product) {
+                currentProductId = id;
+                document.getElementById('productName').value = product.name;
+                document.getElementById('productTotalCost').value = product.totalCost.toFixed(2);
+                document.getElementById('productSuggestedPrice').value = product.suggestedPrice ? product.suggestedPrice.toFixed(2) : '';
+                document.getElementById('productActualPrice').value = product.actualPrice || '';
+                document.getElementById('productProfitMargin').value = product.profitMargin ? product.profitMargin.toFixed(2) : '';
+                
+                currentProductComponents = [...product.components];
+                renderProductComponentsList();
+                console.log('商品数据已填充到表单');
+            } else {
+                console.error('找不到商品:', id);
+                alert('找不到商品数据');
+            }
+        };
+
+        // 全局函数 - 删除商品
+        window.deleteProduct = function(id) {
+            if (confirm('确定要删除这个商品吗？')) {
+                products = products.filter(p => p.id !== id);
+                localStorage.setItem('products', JSON.stringify(products));
+                renderProductsTable();
+                alert('商品已删除');
+            }
+        };
+
+        // DOM加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM加载完成，开始初始化...');
+            
+            // 初始化标签页
+            initTabs();
+            
+            // 初始化原材料模块
+            initRawMaterials();
+            
+            // 初始化半成品模块
+            initSemiFinished();
+            
+            // 初始化商品模块
+            initProducts();
+            
+            // 初始化商品汇总模块
+            initProductSummary();
+            
+            // 初始化导入导出功能
+            initImportExport();
+            
+            // 初始化图片识别功能
+            initImageRecognition();
+            
+            // 页面加载时强制重新计算所有价格
+            setTimeout(() => {
+                forceRecalculateAllPrices();
+            }, 100);
+        });
+
+        // 初始化标签页
+        function initTabs() {
+            const tabButtons = document.querySelectorAll('#tabNav button');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            console.log('标签按钮数量:', tabButtons.length);
+            console.log('标签内容数量:', tabContents.length);
+            
+            tabButtons.forEach(button => {
+                console.log('按钮ID:', button.id, '数据标签:', button.dataset.tab);
+                
+                button.addEventListener('click', function() {
+                    const tabId = this.dataset.tab;
+                    console.log('点击标签:', tabId);
+                    
+                    // 更新标签按钮状态
+                    tabButtons.forEach(btn => {
+                        btn.classList.remove('tab-active');
+                        btn.classList.add('hover:text-gray-600');
+                    });
+                    this.classList.add('tab-active');
+                    this.classList.remove('hover:text-gray-600');
+                    
+                    // 更新标签内容显示
+                    tabContents.forEach(content => {
+                        console.log('隐藏内容:', content.id);
+                        content.classList.add('hidden');
+                    });
+                    
+                    const targetContent = document.getElementById(tabId);
+                    if (targetContent) {
+                        console.log('显示内容:', tabId);
+                        targetContent.classList.remove('hidden');
+                        
+                        // 如果切换到半成品标签，更新材料选择器
+                        if (tabId === 'semiFinished') {
+                            console.log('切换到半成品标签，更新材料选择器');
+                            setTimeout(() => {
+                                updateMaterialSelect();
+                            }, 100);
+                        }
+                    } else {
+                        console.error('找不到内容元素:', tabId);
+                    }
+                    
+
+                });
+            });
+        }
+
+        // ==================== 原材料模块 ====================
+
+        // 初始化原材料模块
+        function initRawMaterials() {
+            console.log('初始化原材料模块...');
+            
+            // 渲染原材料表格
+            renderRawMaterialsTable();
+            
+            // 绑定表单事件
+            const rawMaterialForm = document.getElementById('rawMaterialForm');
+            if (rawMaterialForm) {
+                rawMaterialForm.addEventListener('submit', handleRawMaterialSubmit);
+            }
+            
+            const cancelRawMaterial = document.getElementById('cancelRawMaterial');
+            if (cancelRawMaterial) {
+                cancelRawMaterial.addEventListener('click', resetRawMaterialForm);
+            }
+            
+            // 绑定搜索事件
+            const rawMaterialSearch = document.getElementById('rawMaterialSearch');
+            if (rawMaterialSearch) {
+                rawMaterialSearch.addEventListener('input', function() {
+                    handleRawMaterialSearch(this.value);
+                });
+            }
+            
+            // 绑定自动计算事件
+            const rawMaterialPrice = document.getElementById('rawMaterialPrice');
+            const rawMaterialSpec = document.getElementById('rawMaterialSpec');
+            const rawMaterialYield = document.getElementById('rawMaterialYield');
+            
+            if (rawMaterialPrice) rawMaterialPrice.addEventListener('input', calculateRawMaterialUnitPrice);
+            if (rawMaterialSpec) rawMaterialSpec.addEventListener('input', calculateRawMaterialUnitPrice);
+            if (rawMaterialYield) rawMaterialYield.addEventListener('input', calculateRawMaterialUnitPrice);
+        }
+
+        // 渲染原材料表格
+        function renderRawMaterialsTable(filter = '') {
+            const tableBody = document.getElementById('rawMaterialTable');
+            const emptyState = document.getElementById('rawMaterialEmpty');
+            
+            if (!tableBody || !emptyState) {
+                console.error('找不到原材料表格元素');
+                return;
+            }
+            
+            // 过滤材料
+            const filteredMaterials = filter 
+                ? rawMaterials.filter(material => material.name.toLowerCase().includes(filter.toLowerCase()))
+                : rawMaterials;
+            
+            // 显示空状态或表格
+            if (filteredMaterials.length === 0) {
+                tableBody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            
+            // 渲染表格内容
+            tableBody.innerHTML = filteredMaterials.map(material => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="table-cell">${material.name}</td>
+                    <td class="table-cell">${material.specification}</td>
+                    <td class="table-cell">${material.unit}</td>
+                    <td class="table-cell">${material.price.toFixed(2)}</td>
+                    <td class="table-cell">${material.yieldRate.toFixed(2)}</td>
+                    <td class="table-cell">${material.unitPrice.toFixed(2)}</td>
+                    <td class="table-cell">
+                        <div class="flex space-x-2">
+                            <button class="text-blue-600 hover:text-blue-800" onclick="editRawMaterial(${material.id})">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800" onclick="deleteRawMaterial(${material.id})">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+
+
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 处理原材料表单提交
+        function handleRawMaterialSubmit(e) {
+            e.preventDefault();
+            console.log('提交原材料表单...');
+            
+            const name = document.getElementById('rawMaterialName').value;
+            const specification = parseFloat(document.getElementById('rawMaterialSpec').value);
+            const unit = document.getElementById('rawMaterialUnit').value;
+            const price = parseFloat(document.getElementById('rawMaterialPrice').value);
+            const yieldRate = parseFloat(document.getElementById('rawMaterialYield').value);
+            
+            // 验证输入
+            if (!name || isNaN(specification) || !unit || isNaN(price) || isNaN(yieldRate)) {
+                alert('请填写所有必填字段并确保数值正确');
+                return;
+            }
+            
+            // 计算单价
+            const unitPrice = price / (specification * (yieldRate / 100));
+            
+            if (currentRawMaterialId) {
+                // 更新现有材料
+                const index = rawMaterials.findIndex(m => m.id === currentRawMaterialId);
+                if (index !== -1) {
+                    rawMaterials[index] = {
+                        id: currentRawMaterialId,
+                        name,
+                        specification,
+                        unit,
+                        price,
+                        yieldRate,
+                        unitPrice
+                    };
+                }
+            } else {
+                // 添加新材料
+                const newMaterial = {
+                    id: Date.now(),
+                    name,
+                    specification,
+                    unit,
+                    price,
+                    yieldRate,
+                    unitPrice
+                };
+                rawMaterials.push(newMaterial);
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+            console.log('原材料数据已保存');
+            
+            // 重新渲染表格
+            renderRawMaterialsTable();
+            
+            // 强制重新计算所有价格
+            forceRecalculateAllPrices();
+            
+            // 重置表单
+            resetRawMaterialForm();
+            
+            // 更新半成品和成品中使用的该材料的价格
+            updateDependentPrices();
+            
+            // 更新材料选择器（如果当前在半成品标签页）
+            const currentTab = document.querySelector('#tabNav button.tab-active');
+            if (currentTab && currentTab.dataset.tab === 'semiFinished') {
+                updateMaterialSelect();
+            }
+            
+            // 显示成功提示
+            alert('原材料信息保存成功！');
+        }
+
+        // 计算原材料单价
+        function calculateRawMaterialUnitPrice() {
+            const price = parseFloat(document.getElementById('rawMaterialPrice').value) || 0;
+            const spec = parseFloat(document.getElementById('rawMaterialSpec').value) || 0;
+            const yieldRate = parseFloat(document.getElementById('rawMaterialYield').value) || 0;
+            const unitPriceInput = document.getElementById('rawMaterialUnitPrice');
+            
+            if (unitPriceInput && price > 0 && spec > 0 && yieldRate > 0) {
+                const unitPrice = price / (spec * (yieldRate / 100));
+                unitPriceInput.value = unitPrice.toFixed(2);
+            } else if (unitPriceInput) {
+                unitPriceInput.value = '';
+            }
+        }
+
+
+
+        // 重置原材料表单
+        function resetRawMaterialForm() {
+            currentRawMaterialId = null;
+            document.getElementById('rawMaterialForm').reset();
+            document.getElementById('rawMaterialUnitPrice').value = '';
+        }
+
+        // 处理原材料搜索
+        function handleRawMaterialSearch(filter) {
+            renderRawMaterialsTable(filter);
+        }
+
+        // ==================== 半成品模块 ====================
+
+        // 初始化半成品模块
+        function initSemiFinished() {
+            console.log('=== 初始化半成品模块 ===');
+            
+            // 检查localStorage数据
+            const storedData = localStorage.getItem('semiFinishedProducts');
+            console.log('存储的半成品数据:', storedData);
+            
+            if (storedData) {
+                try {
+                    semiFinishedProducts = JSON.parse(storedData);
+                    console.log('解析后的半成品数据:', semiFinishedProducts);
+                } catch (e) {
+                    console.error('解析半成品数据失败:', e);
+                    semiFinishedProducts = [];
+                }
+            }
+            
+            // 渲染半成品表格
+            renderSemiFinishedTable();
+            
+            // 初始化测试数据（如果没有数据）
+            if (semiFinishedProducts.length === 0) {
+                console.log('创建测试半成品数据');
+                semiFinishedProducts = [
+                    {
+                        id: 1,
+                        name: '生甜甜圈',
+                        materials: [
+                            { componentType: 'raw', componentId: 1, quantity: 500 },
+                            { componentType: 'raw', componentId: 2, quantity: 200 }
+                        ],
+                        totalWeight: 700,
+                        yieldRate: 95,
+                        totalPrice: 25.5,
+                        unitPrice: 0.038
+                    },
+                    {
+                        id: 2,
+                        name: '南瓜泥',
+                        materials: [
+                            { componentType: 'raw', componentId: 3, quantity: 1000 }
+                        ],
+                        totalWeight: 800,
+                        yieldRate: 80,
+                        totalPrice: 15.0,
+                        unitPrice: 0.023
+                    },
+                    {
+                        id: 3,
+                        name: '汤种',
+                        materials: [
+                            { componentType: 'raw', componentId: 1, quantity: 300 },
+                            { componentType: 'raw', componentId: 4, quantity: 500 }
+                        ],
+                        totalWeight: 800,
+                        yieldRate: 100,
+                        totalPrice: 18.75,
+                        unitPrice: 0.023
+                    }
+                ];
+                localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+                console.log('测试数据已创建');
+                renderSemiFinishedTable(); // 重新渲染表格
+            }
+            
+            // 绑定表单事件
+            const semiFinishedForm = document.getElementById('semiFinishedForm');
+            if (semiFinishedForm) {
+                semiFinishedForm.addEventListener('submit', handleSemiFinishedSubmit);
+            }
+            
+            const cancelSemiFinished = document.getElementById('cancelSemiFinished');
+            if (cancelSemiFinished) {
+                cancelSemiFinished.addEventListener('click', resetSemiFinishedForm);
+            }
+            
+            // 绑定搜索事件
+            const semiFinishedSearch = document.getElementById('semiFinishedSearch');
+            if (semiFinishedSearch) {
+                semiFinishedSearch.addEventListener('input', function() {
+                    handleSemiFinishedSearch(this.value);
+                });
+            }
+            
+            // 绑定组件类型选择事件
+            const addComponentTypeSelect = document.getElementById('addComponentTypeSelect');
+            if (addComponentTypeSelect) {
+                addComponentTypeSelect.addEventListener('change', updateMaterialSelect);
+            }
+            
+            // 绑定搜索输入事件
+            const materialSearchInput = document.getElementById('materialSearchInput');
+            if (materialSearchInput) {
+                materialSearchInput.addEventListener('input', handleMaterialSearchInput);
+            }
+            
+            // 绑定添加材料事件
+            const addMaterialBtn = document.getElementById('addMaterialBtn');
+            if (addMaterialBtn) {
+                addMaterialBtn.addEventListener('click', addMaterialToSemiFinished);
+            }
+            
+            // 绑定下拉按钮事件
+            const toggleMaterialDropdown = document.getElementById('toggleMaterialDropdown');
+            if (toggleMaterialDropdown) {
+                toggleMaterialDropdown.addEventListener('click', function() {
+                    const componentType = document.getElementById('addComponentTypeSelect').value;
+                    if (componentType) {
+                        showMaterialDropdown(componentType);
+                    } else {
+                        alert('请先选择组件类型');
+                    }
+                });
+            }
+            
+            // 绑定自动计算事件
+            const semiFinishedTotalWeight = document.getElementById('semiFinishedTotalWeight');
+            const semiFinishedYield = document.getElementById('semiFinishedYield');
+            
+            if (semiFinishedTotalWeight) semiFinishedTotalWeight.addEventListener('input', calculateSemiFinishedPrice);
+            if (semiFinishedYield) semiFinishedYield.addEventListener('input', calculateSemiFinishedPrice);
+            
+            // 更新材料选择器
+            updateMaterialSelect();
+        }
+
+        // 渲染半成品表格
+        function renderSemiFinishedTable(filter = '') {
+            const tableBody = document.getElementById('semiFinishedTable');
+            const emptyState = document.getElementById('semiFinishedEmpty');
+            
+            if (!tableBody || !emptyState) {
+                console.error('找不到半成品表格元素');
+                return;
+            }
+            
+            // 过滤半成品
+            const filteredProducts = filter 
+                ? semiFinishedProducts.filter(product => product.name.toLowerCase().includes(filter.toLowerCase()))
+                : semiFinishedProducts;
+            
+            // 显示空状态或表格
+            if (filteredProducts.length === 0) {
+                tableBody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            
+            // 渲染表格内容
+            tableBody.innerHTML = filteredProducts.map(product => {
+                // 确保价格数据有效
+                const totalPrice = product.totalPrice && product.totalPrice > 0 ? product.totalPrice : 0;
+                const unitPrice = product.unitPrice && product.unitPrice > 0 ? product.unitPrice : 0;
+                
+                return `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="table-cell">${product.name}</td>
+                    <td class="table-cell">${product.unit || '单位'}</td>
+                    <td class="table-cell">${product.totalWeight}</td>
+                    <td class="table-cell">${product.yieldRate.toFixed(2)}</td>
+                    <td class="table-cell">${totalPrice.toFixed(2)}</td>
+                    <td class="table-cell">${unitPrice.toFixed(2)}</td>
+                    <td class="table-cell">
+                        <div class="flex space-x-2">
+                            <button class="text-blue-600 hover:text-blue-800" onclick="editSemiFinished(${product.id})">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800" onclick="deleteSemiFinished(${product.id})">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }).join('');
+        }
+
+        // 更新材料选择器
+        window.updateMaterialSelect = function updateMaterialSelect() {
+            console.log('更新材料选择器');
+            // 清空搜索框和结果
+            document.getElementById('materialSearchInput').value = '';
+            document.getElementById('searchResults').classList.add('hidden');
+        }
+
+        // 处理材料搜索输入
+        window.handleMaterialSearchInput = function handleMaterialSearchInput() {
+            const searchInput = document.getElementById('materialSearchInput');
+            const searchResults = document.getElementById('searchResults');
+            const componentType = document.getElementById('addComponentTypeSelect').value;
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            
+            if (!componentType) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+            
+            if (!searchTerm) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+            
+            let results = [];
+            
+            if (componentType === 'rawMaterial') {
+                results = rawMaterials.filter(material => 
+                    material.name.toLowerCase().includes(searchTerm)
+                ).map(material => ({
+                    id: material.id,
+                    name: material.name,
+                    price: material.unitPrice,
+                    unit: material.unit,
+                    type: 'raw'
+                }));
+            } else if (componentType === 'semiFinished') {
+                results = semiFinishedProducts
+                    .filter(p => p.id !== currentSemiFinishedId)
+                    .filter(product => 
+                        product.name.toLowerCase().includes(searchTerm)
+                    ).map(product => ({
+                        id: product.id,
+                        name: product.name,
+                        price: product.unitPrice,
+                        unit: product.unit || '单位',
+                        type: 'semi'
+                    }));
+            }
+            
+            renderSearchResults(results);
+        }
+
+        // 渲染搜索结果
+        function renderSearchResults(results) {
+            const searchResults = document.getElementById('searchResults');
+            
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="p-3 text-gray-500 text-center">未找到匹配的材料</div>';
+                searchResults.classList.remove('hidden');
+                return;
+            }
+            
+            searchResults.innerHTML = results.map(item => `
+                <div class="p-3 hover:bg-gray-100 cursor-pointer flex justify-between items-center" 
+                     onclick="window.selectMaterial('${item.type}', ${item.id}, '${item.name}', ${item.price}, '${item.unit}')">
+                    <div>
+                        <div class="font-medium">${item.name}</div>
+                        <div class="text-sm text-gray-500">${item.price.toFixed(2)}元/${item.unit}</div>
+                    </div>
+
+
+                    <div class="text-sm px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                        ${item.type === 'raw' ? '原材料' : '半成品'}
+                    </div>
+
+
+                </div>
+
+
+            `).join('');
+            
+            searchResults.classList.remove('hidden');
+        }
+
+        // 选择材料
+        window.selectMaterial = function selectMaterial(type, id, name, price, unit) {
+            const searchInput = document.getElementById('materialSearchInput');
+            const searchResults = document.getElementById('searchResults');
+            
+            searchInput.value = name;
+            searchResults.classList.add('hidden');
+            
+            // 存储选中的材料信息
+            window.selectedMaterial = { type, id, name, price, unit };
+        }
+        function handleSemiFinishedSubmit(e) {
+            e.preventDefault();
+            console.log('提交半成品表单...');
+            
+            const name = document.getElementById('semiFinishedName').value;
+            const unit = document.getElementById('semiFinishedUnit').value;
+            const totalWeight = parseFloat(document.getElementById('semiFinishedTotalWeight').value);
+            const yieldRate = parseFloat(document.getElementById('semiFinishedYield').value);
+            
+            // 验证输入
+            if (!name || !unit || isNaN(totalWeight) || isNaN(yieldRate) || currentSemiFinishedMaterials.length === 0) {
+                alert('请填写所有必填字段并添加至少一种材料');
+                return;
+            }
+            
+            // 计算总成本和单价
+            const totalPrice = calculateSemiFinishedTotalPrice();
+            const unitPrice = totalPrice / (totalWeight * (yieldRate / 100));
+            
+            if (currentSemiFinishedId) {
+                // 更新现有半成品
+                const index = semiFinishedProducts.findIndex(p => p.id === currentSemiFinishedId);
+                if (index !== -1) {
+                    semiFinishedProducts[index] = {
+                        id: currentSemiFinishedId,
+                        name,
+                        unit,
+                        materials: [...currentSemiFinishedMaterials],
+                        totalWeight,
+                        yieldRate,
+                        totalPrice,
+                        unitPrice
+                    };
+                }
+            } else {
+                // 添加新半成品
+                const newProduct = {
+                    id: Date.now(),
+                    name,
+                    unit,
+                    materials: [...currentSemiFinishedMaterials],
+                    totalWeight,
+                    yieldRate,
+                    totalPrice,
+                    unitPrice
+                };
+                semiFinishedProducts.push(newProduct);
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+            console.log('半成品数据已保存');
+            
+            // 重新渲染表格
+            renderSemiFinishedTable();
+            
+            // 重置表单
+            resetSemiFinishedForm();
+            
+            // 立即计算并显示价格
+            console.log('表单提交后立即计算价格');
+            setTimeout(() => {
+                calculateSemiFinishedPrice();
+            }, 100);
+            
+            // 更新成品中使用的该半成品的价格
+            updateFinishedProductsUsingSemiFinished();
+            
+            // 显示成功提示
+            alert('半成品信息保存成功！');
+        }
+
+        // 计算半成品价格和单价
+        function calculateSemiFinishedPrice() {
+            console.log('开始计算半成品价格...');
+            console.log('当前材料列表:', currentSemiFinishedMaterials);
+            
+            const totalWeight = parseFloat(document.getElementById('semiFinishedTotalWeight').value) || 0;
+            const yieldRate = parseFloat(document.getElementById('semiFinishedYield').value) || 0;
+            
+            console.log('总重量:', totalWeight, '应产率:', yieldRate, '材料数量:', currentSemiFinishedMaterials.length);
+            
+            if (totalWeight > 0 && yieldRate > 0 && currentSemiFinishedMaterials.length > 0) {
+                const totalPrice = calculateSemiFinishedTotalPrice();
+                console.log('计算得到的总价:', totalPrice);
+                
+                const unitPrice = totalPrice / (totalWeight * (yieldRate / 100));
+                console.log('计算得到的单价:', unitPrice);
+                
+                document.getElementById('semiFinishedTotalPrice').value = totalPrice.toFixed(2);
+                document.getElementById('semiFinishedUnitPrice').value = unitPrice.toFixed(2);
+                console.log('价格已更新到UI');
+            } else {
+                console.log('条件不满足，清空价格显示');
+                document.getElementById('semiFinishedTotalPrice').value = '';
+                document.getElementById('semiFinishedUnitPrice').value = '';
+            }
+        }
+
+        // 添加材料到半成品
+        window.addMaterialToSemiFinished = function addMaterialToSemiFinished() {
+            console.log('添加材料到半成品被调用');
+            const componentType = document.getElementById('addComponentTypeSelect').value;
+            const quantity = parseFloat(document.getElementById('addMaterialQuantity').value);
+            
+            console.log('组件类型:', componentType, '选中的材料:', window.selectedMaterial, '数量:', quantity);
+            
+            if (!componentType || !window.selectedMaterial || isNaN(quantity) || quantity <= 0) {
+                console.log('添加材料失败：条件不满足');
+                alert('请选择组件类型、搜索并选择具体组件，然后输入有效的数量');
+                return;
+            }
+            
+            const { type, id, name, price, unit } = window.selectedMaterial;
+            
+            // 检查组件是否已添加
+            const existingIndex = currentSemiFinishedMaterials.findIndex(m => m.componentType === type && m.componentId === id);
+            if (existingIndex !== -1) {
+                // 更新数量
+                currentSemiFinishedMaterials[existingIndex].quantity = quantity;
+            } else {
+                // 添加新组件
+                currentSemiFinishedMaterials.push({
+                    componentType: type,
+                    componentId: id,
+                    quantity
+                });
+            }
+            
+            // 更新材料列表显示
+            renderSemiFinishedMaterialsList();
+            
+            // 强制更新价格计算
+            console.log('添加材料后强制计算价格');
+            setTimeout(() => {
+                calculateSemiFinishedPrice();
+            }, 100);
+            
+            // 清空选中的材料和数量输入
+            window.selectedMaterial = null;
+            document.getElementById('addMaterialQuantity').value = '';
+        }
+
+        // 渲染半成品材料列表
+        window.renderSemiFinishedMaterialsList = function renderSemiFinishedMaterialsList() {
+            console.log('渲染半成品材料列表，材料数量:', currentSemiFinishedMaterials.length);
+            const materialsList = document.getElementById('materialsList');
+            if (!materialsList) {
+                console.error('找不到材料列表元素');
+                return;
+            }
+            
+            if (!Array.isArray(currentSemiFinishedMaterials) || currentSemiFinishedMaterials.length === 0) {
+                materialsList.innerHTML = '<p class="text-gray-500 text-center">暂无材料，请添加原材料或半成品</p>';
+                return;
+            }
+            
+            materialsList.innerHTML = currentSemiFinishedMaterials.map(component => {
+                let item, price, unit, typeLabel;
+                
+                if (component.componentType === 'raw') {
+                    item = rawMaterials.find(m => m.id === component.componentId);
+                    if (item) {
+                        price = item.unitPrice;
+                        unit = item.unit;
+                        typeLabel = '原材料';
+                    }
+                } else {
+                    item = semiFinishedProducts.find(p => p.id === component.componentId);
+                    if (item) {
+                        price = item.unitPrice;
+                        unit = '单位';
+                        typeLabel = '半成品';
+                    }
+                }
+                
+                if (!item) return '';
+                
+                const subtotal = price * component.quantity;
+                
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="text-gray-500 ml-2">${component.quantity} ${unit}</span>
+                            <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">${typeLabel}</span>
+                        </div>
+
+
+                        <div class="flex items-center space-x-4">
+                            <span class="text-gray-700">${subtotal.toFixed(2)}元</span>
+                            <button class="text-blue-600 hover:text-blue-800 mr-2" onclick="editMaterialQuantity('${component.componentType}', ${component.componentId}, ${component.quantity})">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800" onclick="window.removeMaterialFromSemiFinished('${component.componentType}', ${component.componentId})">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+
+
+                    </div>
+
+
+                `;
+            }).join('');
+        }
+
+        // 全局函数 - 从半成品中移除材料
+        window.removeMaterialFromSemiFinished = function(componentType, componentId) {
+            currentSemiFinishedMaterials = currentSemiFinishedMaterials.filter(m => !(m.componentType === componentType && m.componentId === componentId));
+            renderSemiFinishedMaterialsList();
+            calculateSemiFinishedPrice();
+        };
+
+        // 全局函数 - 编辑材料数量
+        window.editMaterialQuantity = function(componentType, componentId, currentQuantity) {
+            const newQuantity = prompt('请输入新的数量:', currentQuantity);
+            if (newQuantity !== null && !isNaN(newQuantity) && parseFloat(newQuantity) > 0) {
+                const materialIndex = currentSemiFinishedMaterials.findIndex(m => m.componentType === componentType && m.componentId === componentId);
+                if (materialIndex !== -1) {
+                    currentSemiFinishedMaterials[materialIndex].quantity = parseFloat(newQuantity);
+                    renderSemiFinishedMaterialsList();
+                    calculateSemiFinishedPrice();
+                }
+            } else if (newQuantity !== null) {
+                alert('请输入有效的数量（大于0的数字）');
+            }
+        };
+
+
+        // 更新依赖价格
+        function updateDependentPrices() {
+            console.log('更新依赖价格...');
+            let semiFinishedChanged = false;
+            let productsChanged = false;
+            
+            // 1. 重新计算所有半成品价格
+            semiFinishedProducts.forEach((semiProduct, semiIndex) => {
+                if (semiProduct.materials && semiProduct.materials.length > 0) {
+                    const originalTotalPrice = semiProduct.totalPrice || 0;
+                    const originalUnitPrice = semiProduct.unitPrice || 0;
+                    
+                    // 计算新的总价
+                    let newTotalPrice = 0;
+                    semiProduct.materials.forEach(material => {
+                        if (material.componentType === 'raw') {
+                            const rawMaterial = rawMaterials.find(m => m.id === material.componentId);
+                            if (rawMaterial && rawMaterial.unitPrice) {
+                                newTotalPrice += rawMaterial.unitPrice * material.quantity;
+                            }
+                        } else if (material.componentType === 'semi') {
+                            // 避免循环引用，只使用其他半成品的价格
+                            const otherSemi = semiFinishedProducts.find(s => s.id === material.componentId && s.id !== semiProduct.id);
+                            if (otherSemi && otherSemi.unitPrice) {
+                                newTotalPrice += otherSemi.unitPrice * material.quantity;
+                            }
+                        }
+                    });
+                    
+                    // 计算新的单价
+                    const newUnitPrice = semiProduct.totalWeight && semiProduct.yieldRate 
+                        ? newTotalPrice / (semiProduct.totalWeight * (semiProduct.yieldRate / 100)) 
+                        : 0;
+                    
+                    // 更新价格
+                    semiFinishedProducts[semiIndex].totalPrice = newTotalPrice;
+                    semiFinishedProducts[semiIndex].unitPrice = newUnitPrice;
+                    
+                    if (newTotalPrice !== originalTotalPrice || newUnitPrice !== originalUnitPrice) {
+                        semiFinishedChanged = true;
+                    }
+                }
+            });
+            
+            // 2. 如果半成品价格有变化，重新计算商品价格
+            if (semiFinishedChanged) {
+                localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+                console.log('半成品价格已更新');
+                
+                products.forEach((product, productIndex) => {
+                    if (product.components && product.components.length > 0) {
+                        const originalTotalPrice = product.totalPrice || 0;
+                        const originalUnitPrice = product.unitPrice || 0;
+                        
+                        // 计算新的总价
+                        let newTotalPrice = 0;
+                        product.components.forEach(component => {
+                            if (component.componentType === 'raw') {
+                                const rawMaterial = rawMaterials.find(m => m.id === component.componentId);
+                                if (rawMaterial && rawMaterial.unitPrice) {
+                                    newTotalPrice += rawMaterial.unitPrice * component.quantity;
+                                }
+                            } else if (component.componentType === 'semi') {
+                                const semiProduct = semiFinishedProducts.find(s => s.id === component.componentId);
+                                if (semiProduct && semiProduct.unitPrice) {
+                                    newTotalPrice += semiProduct.unitPrice * component.quantity;
+                                }
+                            }
+                        });
+                        
+                        // 计算新的单价
+                        const newUnitPrice = product.totalWeight && product.yieldRate 
+                            ? newTotalPrice / (product.totalWeight * (product.yieldRate / 100)) 
+                            : 0;
+                        
+                        // 更新价格
+                        products[productIndex].totalPrice = newTotalPrice;
+                        products[productIndex].unitPrice = newUnitPrice;
+                        
+                        if (newTotalPrice !== originalTotalPrice || newUnitPrice !== originalUnitPrice) {
+                            productsChanged = true;
+                        }
+                    }
+                });
+            }
+            
+            // 3. 保存商品价格变化
+            if (productsChanged) {
+                localStorage.setItem('products', JSON.stringify(products));
+                console.log('商品价格已更新');
+            }
+            
+            // 4. 重新渲染表格
+            if (semiFinishedChanged || productsChanged) {
+                renderSemiFinishedTable();
+                renderProductsTable();
+                renderProductSummaryTable();
+            }
+        }
+
+        // 计算半成品总价
+        function calculateSemiFinishedTotalPrice() {
+            console.log('计算半成品总价，材料列表:', currentSemiFinishedMaterials);
+            
+            let totalPrice = 0;
+            
+            currentSemiFinishedMaterials.forEach(component => {
+                console.log('处理组件:', component);
+                
+                if (component.componentType === 'raw') {
+                    const rawMaterial = rawMaterials.find(m => m.id === component.componentId);
+                    if (rawMaterial) {
+                        const componentCost = rawMaterial.unitPrice * component.quantity;
+                        console.log('原材料成本:', rawMaterial.name, componentCost);
+                        totalPrice += componentCost;
+                    } else {
+                        console.log('找不到原材料:', component.componentId);
+                    }
+                } else if (component.componentType === 'semi') {
+                    // 查找所有半成品（包括当前正在编辑的）
+                    const allSemiFinished = semiFinishedProducts.filter(p => p.id !== currentSemiFinishedId);
+                    const semiProduct = allSemiFinished.find(p => p.id === component.componentId);
+                    
+                    if (semiProduct && semiProduct.unitPrice && semiProduct.unitPrice > 0) {
+                        const componentCost = semiProduct.unitPrice * component.quantity;
+                        console.log('半成品成本:', semiProduct.name, componentCost);
+                        totalPrice += componentCost;
+                    } else {
+                        console.log('找不到有效的半成品或单价为0:', component.componentId);
+                    }
+                }
+            });
+            
+            console.log('计算完成，总价:', totalPrice);
+            return totalPrice;
+        }
+
+        // 编辑半成品
+        window.editSemiFinished = function editSemiFinished(id) {
+            console.log('编辑半成品:', id);
+            const product = semiFinishedProducts.find(p => p.id === id);
+            if (product) {
+                console.log('半成品数据:', product);
+                console.log('材料列表:', product.materials);
+                currentSemiFinishedId = id;
+                // 编辑时直接显示已保存的价格，不需要重新计算
+                console.log('编辑时显示已保存的价格');
+                document.getElementById('semiFinishedName').value = product.name;
+                document.getElementById('semiFinishedUnit').value = product.unit || '';
+                document.getElementById('semiFinishedTotalWeight').value = product.totalWeight;
+                document.getElementById('semiFinishedYield').value = product.yieldRate;
+                document.getElementById('semiFinishedTotalPrice').value = product.totalPrice.toFixed(2);
+                document.getElementById('semiFinishedUnitPrice').value = product.unitPrice.toFixed(2);
+                
+                // 确保materials数组存在
+                currentSemiFinishedMaterials = Array.isArray(product.materials) ? [...product.materials] : [];
+                console.log('当前材料列表:', currentSemiFinishedMaterials);
+                renderSemiFinishedMaterialsList();
+            } else {
+                console.error('未找到ID为', id, '的半成品');
+            }
+        }
+
+        // 删除半成品
+        window.deleteSemiFinished = function deleteSemiFinished(id) {
+            if (confirm('确定要删除这个半成品吗？这可能会影响使用该半成品的成品。')) {
+                semiFinishedProducts = semiFinishedProducts.filter(p => p.id !== id);
+                localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+                renderSemiFinishedTable();
+                updateFinishedProductsUsingSemiFinished();
+                alert('半成品已删除');
+            }
+        }
+
+        // 重置半成品表单
+        function resetSemiFinishedForm() {
+            currentSemiFinishedId = null;
+            currentSemiFinishedMaterials = [];
+            document.getElementById('semiFinishedForm').reset();
+            document.getElementById('semiFinishedTotalPrice').value = '';
+            document.getElementById('semiFinishedUnitPrice').value = '';
+            renderSemiFinishedMaterialsList();
+        }
+
+        // 处理半成品搜索
+        function handleSemiFinishedSearch(filter) {
+            renderSemiFinishedTable(filter);
+        }
+
+        // ==================== 成品模块 ====================
+
+        // 初始化商品模块
+        function initProducts() {
+            console.log('初始化商品模块...');
+            
+            // 渲染商品表格
+            renderProductsTable();
+            
+            // 绑定表单事件
+            const productForm = document.getElementById('productForm');
+            if (productForm) {
+                productForm.addEventListener('submit', handleProductSubmit);
+            }
+            
+            const cancelProduct = document.getElementById('cancelProduct');
+            if (cancelProduct) {
+                cancelProduct.addEventListener('click', resetProductForm);
+            }
+            
+            // 绑定搜索事件
+            const productSearch = document.getElementById('productSearch');
+            if (productSearch) {
+                productSearch.addEventListener('input', function() {
+                    handleProductSearch(this.value);
+                });
+            }
+            
+            // 绑定组件类型选择事件
+            const addComponentTypeSelect = document.getElementById('productAddComponentTypeSelect');
+            if (addComponentTypeSelect) {
+                addComponentTypeSelect.addEventListener('change', updateComponentSelect);
+            }
+            
+            // 绑定搜索输入事件
+            const componentSearchInput = document.getElementById('productComponentSearchInput');
+            if (componentSearchInput) {
+                componentSearchInput.addEventListener('input', handleComponentSearchInput);
+            }
+            
+            // 绑定添加组件事件
+            const addComponentBtn = document.getElementById('productAddComponentBtn');
+            if (addComponentBtn) {
+                addComponentBtn.addEventListener('click', addComponentToProduct);
+            }
+            
+            // 绑定下拉按钮事件
+            const toggleComponentDropdown = document.getElementById('toggleComponentDropdown');
+            if (toggleComponentDropdown) {
+                toggleComponentDropdown.addEventListener('click', function() {
+                    const componentType = document.getElementById('productAddComponentTypeSelect').value;
+                    if (componentType) {
+                        showComponentDropdown(componentType);
+                    } else {
+                        alert('请先选择组件类型');
+                    }
+                });
+            }
+            
+            // 绑定实际售价输入事件
+            const productActualPrice = document.getElementById('productActualPrice');
+            if (productActualPrice) {
+                productActualPrice.addEventListener('input', updateProductTotalCost);
+            }
+        }
+
+        // 显示组件下拉选项
+        function showComponentDropdown(componentType) {
+            console.log('显示组件下拉选项，类型:', componentType);
+            
+            let items = [];
+            
+            if (componentType === 'rawMaterial') {
+                items = rawMaterials.map(material => ({
+                    id: material.id,
+                    name: material.name,
+                    price: material.unitPrice,
+                    unit: material.unit,
+                    type: 'raw'
+                }));
+            } else if (componentType === 'semiFinished') {
+                items = semiFinishedProducts.map(product => ({
+                    id: product.id,
+                    name: product.name,
+                    price: product.unitPrice,
+                    unit: product.unit || '单位',
+                    type: 'semi'
+                }));
+            }
+            
+            renderComponentSearchResults(items);
+        }
+
+        // 显示材料下拉选项
+        function showMaterialDropdown(componentType) {
+            console.log('显示材料下拉选项，类型:', componentType);
+            
+            let items = [];
+            
+            if (componentType === 'rawMaterial') {
+                items = rawMaterials.map(material => ({
+                    id: material.id,
+                    name: material.name,
+                    price: material.unitPrice,
+                    unit: material.unit,
+                    type: 'raw'
+                }));
+            } else if (componentType === 'semiFinished') {
+                items = semiFinishedProducts.map(product => ({
+                    id: product.id,
+                    name: product.name,
+                    price: product.unitPrice,
+                    unit: product.unit || '单位',
+                    type: 'semi'
+                }));
+            }
+            
+            renderMaterialSearchResults(items);
+        }
+
+        // 渲染商品表格
+        function renderProductsTable(filter = '') {
+            const tableBody = document.getElementById('productTable');
+            const emptyState = document.getElementById('productEmpty');
+            
+            if (!tableBody || !emptyState) {
+                console.error('找不到商品表格元素');
+                return;
+            }
+            
+            // 过滤商品
+            const filteredProducts = filter 
+                ? products.filter(product => product.name.toLowerCase().includes(filter.toLowerCase()))
+                : products;
+            
+            // 显示空状态或表格
+            if (filteredProducts.length === 0) {
+                tableBody.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            
+            // 渲染表格内容
+            tableBody.innerHTML = filteredProducts.map(product => `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="table-cell">${product.name}</td>
+                    <td class="table-cell">${product.totalCost.toFixed(2)}</td>
+                    <td class="table-cell">${product.suggestedPrice ? product.suggestedPrice.toFixed(2) : '-'}</td>
+                    <td class="table-cell">${product.actualPrice ? product.actualPrice.toFixed(2) : '-'}</td>
+                    <td class="table-cell">${product.profitMargin ? product.profitMargin.toFixed(2) : '-'}</td>
+                    <td class="table-cell">${product.components.length}</td>
+                    <td class="table-cell">
+                        <div class="flex space-x-2">
+                            <button class="text-blue-600 hover:text-blue-800" onclick="editProduct(${product.id})">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button class="text-red-600 hover:text-red-800" onclick="deleteProduct(${product.id})">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+
+
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 更新组件选择器
+        window.updateComponentSelect = function updateComponentSelect() {
+            console.log('更新组件选择器');
+            // 清空搜索框和结果
+            document.getElementById('productComponentSearchInput').value = '';
+            document.getElementById('productComponentSearchResults').classList.add('hidden');
+        }
+
+        // 处理组件搜索输入
+        window.handleComponentSearchInput = function handleComponentSearchInput() {
+            const searchInput = document.getElementById('productComponentSearchInput');
+            const searchResults = document.getElementById('productComponentSearchResults');
+            const componentType = document.getElementById('productAddComponentTypeSelect').value;
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            
+            if (!componentType) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+            
+            if (!searchTerm) {
+                searchResults.classList.add('hidden');
+                return;
+            }
+            
+            let results = [];
+            
+            if (componentType === 'rawMaterial') {
+                results = rawMaterials.filter(material => 
+                    material.name.toLowerCase().includes(searchTerm)
+                ).map(material => ({
+                    id: material.id,
+                    name: material.name,
+                    price: material.unitPrice,
+                    unit: material.unit,
+                    type: 'raw'
+                }));
+            } else if (componentType === 'semiFinished') {
+                results = semiFinishedProducts
+                    .filter(product => 
+                        product.name.toLowerCase().includes(searchTerm)
+                    ).map(product => ({
+                        id: product.id,
+                        name: product.name,
+                        price: product.unitPrice,
+                        unit: product.unit || '单位',
+                        type: 'semi'
+                    }));
+            }
+            
+            renderComponentSearchResults(results);
+        }
+
+        // 渲染组件搜索结果
+        function renderComponentSearchResults(results) {
+            const searchResults = document.getElementById('productComponentSearchResults');
+            
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="p-3 text-gray-500 text-center">未找到匹配的组件</div>';
+                searchResults.classList.remove('hidden');
+                return;
+            }
+            
+            searchResults.innerHTML = results.map(item => `
+                <div class="p-3 hover:bg-gray-100 cursor-pointer flex justify-between items-center" 
+                     onclick="window.selectComponent('${item.type}', ${item.id}, '${item.name}', ${item.price}, '${item.unit}')">
+                    <div>
+                        <div class="font-medium">${item.name}</div>
+                        <div class="text-sm text-gray-500">${item.price.toFixed(2)}元/${item.unit}</div>
+                    </div>
+
+
+                    <div class="text-sm px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                        ${item.type === 'raw' ? '原材料' : '半成品'}
+                    </div>
+
+
+                </div>
+
+
+            `).join('');
+            
+            searchResults.classList.remove('hidden');
+        }
+
+        // 选择组件
+        window.selectComponent = function selectComponent(type, id, name, price, unit) {
+            const searchInput = document.getElementById('productComponentSearchInput');
+            const searchResults = document.getElementById('productComponentSearchResults');
+            
+            searchInput.value = name;
+            searchResults.classList.add('hidden');
+            
+            // 存储选中的组件信息
+            window.selectedComponent = { type, id, name, price, unit };
+        }
+
+        // 渲染材料搜索结果
+        function renderMaterialSearchResults(results) {
+            const searchResults = document.getElementById('searchResults');
+            
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="p-3 text-gray-500 text-center">未找到匹配的材料</div>';
+                searchResults.classList.remove('hidden');
+                return;
+            }
+            
+            searchResults.innerHTML = results.map(item => `
+                <div class="p-3 hover:bg-gray-100 cursor-pointer flex justify-between items-center" 
+                     onclick="window.selectMaterial('${item.type}', ${item.id}, '${item.name}', ${item.price}, '${item.unit}')">
+                    <div>
+                        <div class="font-medium">${item.name}</div>
+                        <div class="text-sm text-gray-500">${item.price.toFixed(2)}元/${item.unit}</div>
+                    </div>
+                    <div class="text-sm px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
+                        ${item.type === 'raw' ? '原材料' : '半成品'}
+                    </div>
+                </div>
+            `).join('');
+            
+            searchResults.classList.remove('hidden');
+        }
+
+        // 选择材料
+        window.selectMaterial = function selectMaterial(type, id, name, price, unit) {
+            const searchInput = document.getElementById('materialSearchInput');
+            const searchResults = document.getElementById('searchResults');
+            
+            searchInput.value = name;
+            searchResults.classList.add('hidden');
+            
+            // 存储选中的材料信息
+            window.selectedMaterial = { type, id, name, price, unit };
+        }
+
+        // 处理商品表单提交
+        function handleProductSubmit(e) {
+            e.preventDefault();
+            console.log('提交商品表单...');
+            
+            const name = document.getElementById('productName').value;
+            const totalCost = calculateProductTotalCost();
+            
+            // 验证输入
+            if (!name || currentProductComponents.length === 0) {
+                alert('请填写商品名称并添加至少一个组件');
+                return;
+            }
+            
+            if (currentProductId) {
+                // 更新现有商品
+                const index = products.findIndex(p => p.id === currentProductId);
+                if (index !== -1) {
+                    const existingProduct = products[index];
+                    products[index] = {
+                        id: currentProductId,
+                        name,
+                        components: [...currentProductComponents],
+                        totalCost,
+                        suggestedPrice: totalCost / 0.3,
+                        actualPrice: parseFloat(document.getElementById('productActualPrice').value) || 0,
+                        profitMargin: parseFloat(document.getElementById('productProfitMargin').value) || 0,
+                        上架时间: existingProduct.上架时间 || null,
+                        下架时间: existingProduct.下架时间 || null
+                    };
+                }
+            } else {
+                // 添加新商品
+                const newProduct = {
+                    id: Date.now(),
+                    name,
+                    components: [...currentProductComponents],
+                    totalCost,
+                    suggestedPrice: totalCost / 0.3,
+                    actualPrice: parseFloat(document.getElementById('productActualPrice').value) || 0,
+                    profitMargin: parseFloat(document.getElementById('productProfitMargin').value) || 0,
+                   上架时间: null,
+                   下架时间: null
+                };
+                products.push(newProduct);
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('products', JSON.stringify(products));
+            console.log('商品数据已保存');
+            
+            // 重新渲染表格
+            renderProductsTable();
+            
+            // 重置表单
+            resetProductForm();
+            
+            // 显示成功提示
+            alert('商品信息保存成功！');
+        }
+
+        // 添加组件到商品
+        function addComponentToProduct() {
+            console.log('添加组件到商品...');
+            const componentType = document.getElementById('productAddComponentTypeSelect').value;
+            const quantity = parseFloat(document.getElementById('productAddComponentQuantity').value);
+            
+            console.log('组件类型:', componentType);
+            console.log('数量:', quantity);
+            console.log('选中的组件:', window.selectedComponent);
+            
+            if (!componentType) {
+                alert('请选择组件类型');
+                return;
+            }
+            
+            if (!window.selectedComponent) {
+                alert('请搜索并选择具体组件');
+                return;
+            }
+            
+            if (isNaN(quantity) || quantity <= 0) {
+                alert('请输入有效的数量（大于0的数字）');
+                return;
+            }
+            
+            const { type, id, name, price, unit } = window.selectedComponent;
+            
+            // 检查组件是否已添加
+            const existingIndex = currentProductComponents.findIndex(c => c.componentType === type && c.componentId === id);
+            if (existingIndex !== -1) {
+                // 更新数量
+                currentProductComponents[existingIndex].quantity = quantity;
+                console.log('更新现有组件数量');
+            } else {
+                // 添加新组件
+                currentProductComponents.push({
+                    componentType: type,
+                    componentId: id,
+                    quantity
+                });
+                console.log('添加新组件');
+            }
+            
+            // 更新组件列表显示
+            renderProductComponentsList();
+            
+            // 更新总成本
+            updateProductTotalCost();
+            
+            // 清空选中的组件和数量输入
+            window.selectedComponent = null;
+            document.getElementById('productAddComponentQuantity').value = '';
+            
+            console.log('组件添加成功，当前组件数量:', currentProductComponents.length);
+        }
+
+        // 渲染商品组件列表
+        function renderProductComponentsList() {
+            const componentsList = document.getElementById('componentsList');
+            if (!componentsList) return;
+            
+            if (currentProductComponents.length === 0) {
+                componentsList.innerHTML = '<p class="text-gray-500 text-center">暂无组件，请添加原材料或半成品</p>';
+                return;
+            }
+            
+            componentsList.innerHTML = currentProductComponents.map(component => {
+                let item, price, unit;
+                
+                if (component.componentType === 'raw') {
+                    item = rawMaterials.find(m => m.id === component.componentId);
+                    if (item) {
+                        price = item.unitPrice;
+                        unit = item.unit;
+                    }
+                } else {
+                    item = semiFinishedProducts.find(p => p.id === component.componentId);
+                    if (item) {
+                        price = item.unitPrice;
+                        unit = '单位';
+                    }
+                }
+                
+                if (!item) return '';
+                
+                const subtotal = price * component.quantity;
+                
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div class="flex items-center">
+                            <span class="font-medium">${item.name}</span>
+                            <span class="text-gray-500 ml-2">${component.quantity} ${unit}</span>
+                        </div>
+
+
+                        <div class="flex items-center space-x-4">
+                            <span class="text-gray-700">${subtotal.toFixed(2)}元</span>
+                            <button class="text-red-600 hover:text-red-800" onclick="removeComponentFromProduct('${component.componentType}', ${component.componentId})">
+                                <i class="fa fa-times"></i>
+                            </button>
+                        </div>
+
+
+                    </div>
+
+
+                `;
+            }).join('');
+        }
+
+        // 从商品中移除组件
+        function removeComponentFromProduct(componentType, componentId) {
+            currentProductComponents = currentProductComponents.filter(c => !(c.componentType === componentType && c.componentId === componentId));
+            renderProductComponentsList();
+            updateProductTotalCost();
+        }
+
+        // 计算商品总成本
+        function calculateProductTotalCost() {
+            return currentProductComponents.reduce((total, component) => {
+                if (component.componentType === 'raw') {
+                    const rawMaterial = rawMaterials.find(m => m.id === component.componentId);
+                    if (rawMaterial) {
+                        return total + (rawMaterial.unitPrice * component.quantity);
+                    }
+                } else {
+                    const semiProduct = semiFinishedProducts.find(p => p.id === component.componentId);
+                    if (semiProduct) {
+                        return total + (semiProduct.unitPrice * component.quantity);
+                    }
+                }
+                return total;
+            }, 0);
+        }
+
+        // 更新商品总成本显示
+        function updateProductTotalCost() {
+            const totalCost = calculateProductTotalCost();
+            const suggestedPrice = totalCost / 0.3;
+            const actualPrice = parseFloat(document.getElementById('productActualPrice').value) || 0;
+            const profitMargin = actualPrice > 0 ? (1 - (totalCost / actualPrice)) * 100 : 0;
+            
+            document.getElementById('productTotalCost').value = totalCost.toFixed(2);
+            document.getElementById('productSuggestedPrice').value = suggestedPrice.toFixed(2);
+            document.getElementById('productProfitMargin').value = profitMargin.toFixed(2);
+        }
+
+
+
+        // 编辑商品
+        function editProduct(id) {
+            console.log('编辑商品:', id);
+            const product = products.find(p => p.id === id);
+            if (product) {
+                currentProductId = id;
+                document.getElementById('productName').value = product.name;
+                document.getElementById('productTotalCost').value = product.totalCost.toFixed(2);
+                document.getElementById('productSuggestedPrice').value = product.suggestedPrice ? product.suggestedPrice.toFixed(2) : '';
+                document.getElementById('productActualPrice').value = product.actualPrice || '';
+                document.getElementById('productProfitMargin').value = product.profitMargin ? product.profitMargin.toFixed(2) : '';
+                
+                currentProductComponents = [...product.components];
+                renderProductComponentsList();
+            }
+        }
+
+        // 删除商品
+        function deleteProduct(id) {
+            if (confirm('确定要删除这个商品吗？')) {
+                products = products.filter(p => p.id !== id);
+                localStorage.setItem('products', JSON.stringify(products));
+                renderProductsTable();
+                alert('商品已删除');
+            }
+        }
+
+        // 重置商品表单
+        function resetProductForm() {
+            currentProductId = null;
+            currentProductComponents = [];
+            document.getElementById('productForm').reset();
+            renderProductComponentsList();
+        }
+
+        // 处理商品搜索
+        function handleProductSearch(filter) {
+            renderProductsTable(filter);
+        }
+
+        // ==================== 导入导出功能 ====================
+
+        // 初始化导入导出功能
+        
+        // 强制重新计算所有价格（更彻底的版本）
+        function forceRecalculateAllPrices() {
+            console.log('强制重新计算所有价格...');
+            
+            // 1. 首先重新计算所有半成品价格
+            semiFinishedProducts.forEach((semiProduct, index) => {
+                if (semiProduct.materials && semiProduct.materials.length > 0) {
+                    let totalCost = 0;
+                    
+                    // 计算所有材料成本
+                    semiProduct.materials.forEach(material => {
+                        if (material.componentType === 'raw') {
+                            const rawMaterial = rawMaterials.find(m => m.id === material.componentId);
+                            if (rawMaterial && rawMaterial.unitPrice) {
+                                totalCost += rawMaterial.unitPrice * material.quantity;
+                            }
+                        } else if (material.componentType === 'semi') {
+                            // 只使用其他半成品的价格
+                            const otherSemi = semiFinishedProducts.find(s => s.id === material.componentId && s.id !== semiProduct.id);
+                            if (otherSemi && otherSemi.unitPrice) {
+                                totalCost += otherSemi.unitPrice * material.quantity;
+                            }
+                        }
+                    });
+                    
+                    // 计算单价
+                    const unitPrice = semiProduct.totalWeight && semiProduct.yieldRate 
+                        ? totalCost / (semiProduct.totalWeight * (semiProduct.yieldRate / 100)) 
+                        : 0;
+                    
+                    // 直接更新价格
+                    semiFinishedProducts[index].totalPrice = totalCost;
+                    semiFinishedProducts[index].unitPrice = unitPrice;
+                } else {
+                    // 如果没有材料，价格设为0
+                    semiFinishedProducts[index].totalPrice = 0;
+                    semiFinishedProducts[index].unitPrice = 0;
+                }
+            });
+            
+            // 保存半成品数据
+            localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+            console.log('半成品价格已强制更新');
+            
+            // 2. 然后重新计算所有商品价格
+            products.forEach((product, index) => {
+                if (product.components && product.components.length > 0) {
+                    let totalCost = 0;
+                    
+                    // 计算所有组件成本
+                    product.components.forEach(component => {
+                        if (component.componentType === 'raw') {
+                            const rawMaterial = rawMaterials.find(m => m.id === component.componentId);
+                            if (rawMaterial && rawMaterial.unitPrice) {
+                                totalCost += rawMaterial.unitPrice * component.quantity;
+                            }
+                        } else if (component.componentType === 'semi') {
+                            const semiProduct = semiFinishedProducts.find(s => s.id === component.componentId);
+                            if (semiProduct && semiProduct.unitPrice) {
+                                totalCost += semiProduct.unitPrice * component.quantity;
+                            }
+                        }
+                    });
+                    
+                    // 计算单价
+                    const unitPrice = product.totalWeight && product.yieldRate 
+                        ? totalCost / (product.totalWeight * (product.yieldRate / 100)) 
+                        : 0;
+                    
+                    // 直接更新价格
+                    products[index].totalPrice = totalCost;
+                    products[index].unitPrice = unitPrice;
+                } else {
+                    // 如果没有组件，价格设为0
+                    products[index].totalPrice = 0;
+                    products[index].unitPrice = 0;
+                }
+            });
+            
+            // 保存商品数据
+            localStorage.setItem('products', JSON.stringify(products));
+            console.log('商品价格已强制更新');
+            
+            // 3. 重新渲染所有表格
+            renderSemiFinishedTable();
+            renderProductsTable();
+            renderProductSummaryTable();
+        }
+
+        // 全局重新计算函数
+        window.recalculateAllPrices = function recalculateAllPrices() {
+            console.log('手动触发重新计算所有价格...');
+            forceRecalculateAllPrices();
+            alert('重新计算完成！');
+        };
+        
+        // 全局导出函数
+        window.performExport = function performExport() {
+            console.log('用户点击了导出按钮！');
+            try {
+                const data = {
+                    rawMaterials,
+                    semiFinishedProducts,
+                    products,
+                    exportDate: new Date().toISOString(),
+                    version: '1.0',
+                    totalRecords: {
+                        rawMaterials: rawMaterials.length,
+                        semiFinishedProducts: semiFinishedProducts.length,
+                        products: products.length
+                    }
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `material-cost-data-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                // 显示导出成功提示
+                const totalRecords = data.totalRecords.rawMaterials + data.totalRecords.semiFinishedProducts + data.totalRecords.products;
+                alert(`数据导出成功！\n\n已导出 ${data.totalRecords.rawMaterials} 个原材料\n${data.totalRecords.semiFinishedProducts} 个半成品\n${data.totalRecords.products} 个商品\n\n总计 ${totalRecords} 条记录`);
+                
+                console.log('数据导出成功:', data);
+            } catch (error) {
+                console.error('导出失败:', error);
+                alert('导出失败：' + error.message);
+            }
+        };
+
+        // 全局导入函数
+        window.performImport = function performImport() {
+            console.log('用户点击了导入按钮！');
+            try {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = '.json';
+                input.onchange = function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        console.log('选择了文件:', file.name);
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            try {
+                                const data = JSON.parse(e.target.result);
+                                console.log('解析文件成功，数据结构:', Object.keys(data));
+                                
+                                // 验证数据格式
+                                if (data.rawMaterials && Array.isArray(data.rawMaterials) &&
+                                    data.semiFinishedProducts && Array.isArray(data.semiFinishedProducts) &&
+                                    data.products && Array.isArray(data.products)) {
+                                    
+                                    // 显示导入信息
+                                    let importInfo = `即将导入数据：\n\n${data.rawMaterials.length} 个原材料\n${data.semiFinishedProducts.length} 个半成品\n${data.products.length} 个商品\n\n总计 ${data.rawMaterials.length + data.semiFinishedProducts.length + data.products.length} 条记录`;
+                                    
+                                    if (data.exportDate) {
+                                        const exportDate = new Date(data.exportDate).toLocaleString();
+                                        importInfo += `\n\n导出时间：${exportDate}`;
+                                    }
+                                    
+                                    if (data.version) {
+                                        importInfo += `\n版本：${data.version}`;
+                                    }
+                                    
+                                    if (confirm(importInfo + '\n\n确定要导入这些数据吗？这将覆盖当前所有数据。')) {
+                                        // 导入数据
+                                        if (data.rawMaterials) {
+                                            rawMaterials = data.rawMaterials;
+                                            localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+                                        }
+                                        
+                                        if (data.semiFinishedProducts) {
+                                            semiFinishedProducts = data.semiFinishedProducts;
+                                            localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+                                        }
+                                        
+                                        if (data.products) {
+                                            products = data.products;
+                                            localStorage.setItem('products', JSON.stringify(products));
+                                        }
+                                        
+                                        // 重新渲染所有表格
+                                        renderRawMaterialsTable();
+                                        renderSemiFinishedTable();
+                                        renderProductsTable();
+                                        
+                                        // 更新材料选择器
+                                        updateMaterialSelect();
+                                        
+                                        alert('数据导入成功！');
+                                    }
+                                } else {
+                                    console.error('数据格式验证失败:', data);
+                                    alert('无效的数据格式，请检查文件内容。');
+                                }
+                            } catch (error) {
+                                console.error('解析文件失败:', error);
+                                alert('文件格式错误，请选择有效的JSON文件');
+                            }
+                        };
+                        reader.readAsText(file);
+                    }
+                };
+                input.click();
+            } catch (error) {
+                console.error('导入失败:', error);
+                alert('导入失败：' + error.message);
+            }
+        };
+
+        // 导出数据函数（提前定义）
+        window.exportData = function exportData() {
+            const data = {
+                rawMaterials,
+                semiFinishedProducts,
+                products,
+                exportDate: new Date().toISOString(),
+                version: '1.0',
+                totalRecords: {
+                    rawMaterials: rawMaterials.length,
+                    semiFinishedProducts: semiFinishedProducts.length,
+                    products: products.length
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `material-cost-data-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // 显示导出成功提示
+            const totalRecords = data.totalRecords.rawMaterials + data.totalRecords.semiFinishedProducts + data.totalRecords.products;
+            alert(`数据导出成功！\n\n已导出 ${data.totalRecords.rawMaterials} 个原材料\n${data.totalRecords.semiFinishedProducts} 个半成品\n${data.totalRecords.products} 个商品\n\n总计 ${totalRecords} 条记录`);
+            
+            console.log('数据导出成功:', data);
+        };
+
+        function initImportExport() {
+            console.log('初始化导入导出功能...');
+            
+            // 导入数据按钮
+            const importDataBtn = document.getElementById('importData');
+            console.log('导入按钮元素:', importDataBtn);
+            if (importDataBtn) {
+                console.log('找到导入按钮，绑定点击事件');
+                importDataBtn.addEventListener('click', function() {
+                    console.log('导入按钮被点击！');
+                    try {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = '.json';
+                        input.onchange = function(e) {
+                            const file = e.target.files[0];
+                            if (file) {
+                                console.log('选择了文件:', file.name);
+                                const reader = new FileReader();
+                                reader.onload = function(e) {
+                                    try {
+                                        const data = JSON.parse(e.target.result);
+                                        console.log('解析文件成功，数据结构:', Object.keys(data));
+                                        
+                                        // 验证数据格式
+                                        if (data.rawMaterials && Array.isArray(data.rawMaterials) &&
+                                            data.semiFinishedProducts && Array.isArray(data.semiFinishedProducts) &&
+                                            data.products && Array.isArray(data.products)) {
+                                            
+                                            // 显示导入信息
+                                            let importInfo = `即将导入数据：\n\n${data.rawMaterials.length} 个原材料\n${data.semiFinishedProducts.length} 个半成品\n${data.products.length} 个商品\n\n总计 ${data.rawMaterials.length + data.semiFinishedProducts.length + data.products.length} 条记录`;
+                                            
+                                            if (data.exportDate) {
+                                                const exportDate = new Date(data.exportDate).toLocaleString();
+                                                importInfo += `\n\n导出时间：${exportDate}`;
+                                            }
+                                            
+                                            if (data.version) {
+                                                importInfo += `\n版本：${data.version}`;
+                                            }
+                                            
+                                            if (confirm(importInfo + '\n\n确定要导入这些数据吗？这将覆盖当前所有数据。')) {
+                                                importData(data);
+                                            }
+                                        } else {
+                                            console.error('数据格式验证失败:', data);
+                                            alert('无效的数据格式，请检查文件内容。');
+                                        }
+                                    } catch (error) {
+                                        console.error('解析文件失败:', error);
+                                        alert('文件格式错误，请选择有效的JSON文件');
+                                    }
+                                };
+                                reader.readAsText(file);
+                            }
+                        };
+                        input.click();
+                    } catch (error) {
+                        console.error('导入数据时出错:', error);
+                        alert('导入失败：' + error.message);
+                    }
+                });
+            } else {
+                console.error('找不到导入按钮！');
+            }
+            
+            // 导出数据按钮
+            const exportDataBtn = document.getElementById('exportData');
+            if (exportDataBtn) {
+                console.log('找到导出按钮，绑定点击事件');
+                exportDataBtn.addEventListener('click', function() {
+                    console.log('导出按钮被点击！');
+                    try {
+                        window.exportData();
+                    } catch (error) {
+                        console.error('导出数据时出错:', error);
+                        alert('导出失败：' + error.message);
+                    }
+                });
+            } else {
+                console.error('找不到导出按钮！');
+            }
+        }
+
+        // 导入数据
+        function importData(data) {
+            if (data.rawMaterials) {
+                rawMaterials = data.rawMaterials;
+                localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+            }
+            
+            if (data.semiFinishedProducts) {
+                semiFinishedProducts = data.semiFinishedProducts;
+                localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+            }
+            
+            if (data.products) {
+                products = data.products;
+                localStorage.setItem('products', JSON.stringify(products));
+            }
+            
+            // 重新渲染所有表格
+            renderRawMaterialsTable();
+            renderSemiFinishedTable();
+            renderProductsTable();
+            
+            // 更新材料选择器
+            updateMaterialSelect();
+            
+            alert('数据导入成功！');
+        }
+
+
+
+        // ==================== 图片识别功能 ====================
+
+        // 初始化图片识别功能
+        function initImageRecognition() {
+            console.log('初始化图片识别功能...');
+            
+            // 图片识别按钮点击事件
+            const imageRecognitionBtn = document.getElementById('imageRecognition');
+            if (imageRecognitionBtn) {
+                imageRecognitionBtn.addEventListener('click', function() {
+                    document.getElementById('imageRecognitionModal').classList.remove('hidden');
+                });
+            }
+
+            // 关闭图片识别模态框
+            const closeImageRecognitionModal = document.getElementById('closeImageRecognitionModal');
+            if (closeImageRecognitionModal) {
+                closeImageRecognitionModal.addEventListener('click', function() {
+                    document.getElementById('imageRecognitionModal').classList.add('hidden');
+                    resetImageRecognition();
+                });
+            }
+
+            // 图片文件选择事件
+            const imageFile = document.getElementById('imageFile');
+            if (imageFile) {
+                imageFile.addEventListener('change', handleImageFileSelect);
+            }
+
+            // 拍照按钮点击事件
+            const captureFromCamera = document.getElementById('captureFromCamera');
+            if (captureFromCamera) {
+                captureFromCamera.addEventListener('click', openCameraModal);
+            }
+
+            // 关闭摄像头模态框
+            const closeCameraModal = document.getElementById('closeCameraModal');
+            if (closeCameraModal) {
+                closeCameraModal.addEventListener('click', closeCameraModalFunc);
+            }
+
+            // 拍照按钮点击事件
+            const takePhoto = document.getElementById('takePhoto');
+            if (takePhoto) {
+                takePhoto.addEventListener('click', capturePhoto);
+            }
+
+            // 开始识别按钮点击事件
+            const startRecognition = document.getElementById('startRecognition');
+            if (startRecognition) {
+                startRecognition.addEventListener('click', startImageRecognition);
+            }
+
+            // 导入识别数据按钮点击事件
+            const importRecognizedData = document.getElementById('importRecognizedData');
+            if (importRecognizedData) {
+                importRecognizedData.addEventListener('click', importRecognizedDataFunc);
+            }
+        }
+
+        // 处理图片文件选择
+        function handleImageFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imagePreview = document.getElementById('imagePreview');
+                    imagePreview.innerHTML = `<img src="${e.target.result}" class="max-h-full max-w-full object-contain">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 打开摄像头模态框
+        function openCameraModal() {
+            document.getElementById('cameraModal').classList.remove('hidden');
+            
+            const video = document.getElementById('cameraVideo');
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) {
+                        video.srcObject = stream;
+                    })
+                    .catch(function(err) {
+                        console.error('无法访问摄像头:', err);
+                        alert('无法访问摄像头，请检查权限设置');
+                        closeCameraModalFunc();
+                    });
+            } else {
+                alert('您的浏览器不支持摄像头功能');
+                closeCameraModalFunc();
+            }
+        }
+
+        // 关闭摄像头模态框
+        function closeCameraModalFunc() {
+            document.getElementById('cameraModal').classList.add('hidden');
+            
+            const video = document.getElementById('cameraVideo');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
+
+        // 拍照
+        function capturePhoto() {
+            const video = document.getElementById('cameraVideo');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const imageDataURL = canvas.toDataURL('image/jpeg');
+            const imagePreview = document.getElementById('imagePreview');
+            imagePreview.innerHTML = `<img src="${imageDataURL}" class="max-h-full max-w-full object-contain">`;
+            
+            closeCameraModalFunc();
+        }
+
+        // 开始图片识别
+        function startImageRecognition() {
+            const imagePreview = document.getElementById('imagePreview');
+            const img = imagePreview.querySelector('img');
+            
+            if (!img) {
+                alert('请先上传图片或拍照');
+                return;
+            }
+            
+            // 显示进度条
+            document.getElementById('recognitionProgress').classList.remove('hidden');
+            
+            // 模拟识别进度
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 5;
+                document.getElementById('progressPercentage').textContent = `${progress}%`;
+                document.getElementById('progressBar').style.width = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(progressInterval);
+                    setTimeout(() => {
+                        document.getElementById('recognitionProgress').classList.add('hidden');
+                        showRecognitionResult();
+                    }, 500);
+                }
+            }, 100);
+        }
+
+        // 显示识别结果
+        function showRecognitionResult() {
+            const recognitionResult = document.getElementById('recognitionResult');
+            const parsedData = document.getElementById('parsedData');
+            const importRecognizedDataBtn = document.getElementById('importRecognizedData');
+            
+            // 模拟识别结果
+            const mockResult = `
+材料清单：
+1. 钢材 A3  规格：20mm×20mm  数量：100kg  单价：5.2元/kg  金额：520元
+2. 铝材 6061 规格：10mm×10mm  数量：50kg   单价：12.5元/kg 金额：625元
+3. 铜材 T2   规格：5mm×5mm    数量：20kg   单价：45.8元/kg 金额：916元
+4. 塑料 PP   规格：颗粒       数量：30kg   单价：18.6元/kg 金额：558元
+
+总计：2619元
+            `;
+            
+            recognitionResult.innerHTML = `<pre class="whitespace-pre-wrap">${mockResult}</pre>`;
+            
+            // 解析数据
+            const parsedMaterials = [
+                { name: '钢材 A3', specification: 20, unit: 'mm×20mm', price: 520, quantity: 100, yieldRate: 98 },
+                { name: '铝材 6061', specification: 10, unit: 'mm×10mm', price: 625, quantity: 50, yieldRate: 95 },
+                { name: '铜材 T2', specification: 5, unit: 'mm×5mm', price: 916, quantity: 20, yieldRate: 99 },
+                { name: '塑料 PP', specification: 1, unit: 'kg', price: 558, quantity: 30, yieldRate: 90 }
+            ];
+            
+            parsedData.innerHTML = `<pre class="whitespace-pre-wrap">已解析到 ${parsedMaterials.length} 种材料</pre>`;
+            
+            // 启用导入按钮
+            importRecognizedDataBtn.disabled = false;
+            
+            // 存储解析后的数据
+            window.parsedMaterialsData = parsedMaterials;
+        }
+
+        // 导入识别数据
+        function importRecognizedDataFunc() {
+            if (window.parsedMaterialsData && window.parsedMaterialsData.length > 0) {
+                window.parsedMaterialsData.forEach(materialData => {
+                    // 计算单价
+                    const unitPrice = materialData.price / (materialData.specification * (materialData.yieldRate / 100));
+                    
+                    const newMaterial = {
+                        id: Date.now() + Math.random(),
+                        name: materialData.name,
+                        specification: materialData.specification,
+                        unit: materialData.unit,
+                        price: materialData.price,
+                        yieldRate: materialData.yieldRate,
+                        unitPrice: unitPrice
+                    };
+                    
+                    rawMaterials.push(newMaterial);
+                });
+                
+                // 保存到本地存储
+                localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+                
+                // 重新渲染表格
+                renderRawMaterialsTable();
+                
+                // 更新材料选择器
+                updateMaterialSelect();
+                
+                // 关闭模态框
+                document.getElementById('imageRecognitionModal').classList.add('hidden');
+                resetImageRecognition();
+                
+                alert(`成功导入 ${window.parsedMaterialsData.length} 种材料！`);
+            }
+        }
+
+        // 重置图片识别
+        function resetImageRecognition() {
+            document.getElementById('imageFile').value = '';
+            document.getElementById('imagePreview').innerHTML = `
+                <div class="text-center text-gray-500">
+                    <i class="fa fa-image text-4xl mb-2"></i>
+                    <p>图片预览区域</p>
+                </div>
+
+
+            `;
+            document.getElementById('recognitionResult').innerHTML = '<p class="text-gray-500 text-center">识别结果将显示在这里</p>';
+            document.getElementById('parsedData').innerHTML = '<p class="text-gray-500 text-center">解析后的数据将显示在这里</p>';
+            document.getElementById('importRecognizedData').disabled = true;
+            window.parsedMaterialsData = null;
+        }
+
+        // ==================== 辅助功能 ====================
+
+        // 更新依赖价格
+        function updateDependentPrices() {
+            // 更新半成品价格
+            semiFinishedProducts.forEach(product => {
+                let totalPrice = 0;
+                product.materials.forEach(material => {
+                    const rawMaterial = rawMaterials.find(m => m.id === material.materialId);
+                    if (rawMaterial) {
+                        totalPrice += rawMaterial.unitPrice * material.quantity;
+                    }
+                });
+                
+                product.totalPrice = totalPrice;
+                product.unitPrice = totalPrice / (product.totalWeight * (product.yieldRate / 100));
+            });
+            
+            localStorage.setItem('semiFinishedProducts', JSON.stringify(semiFinishedProducts));
+            renderSemiFinishedTable();
+            
+            // 更新成品价格
+            updateFinishedProductsUsingSemiFinished();
+        }
+
+        // 更新使用半成品的商品价格（已废弃，由forceRecalculateAllPrices替代）
+        function updateFinishedProductsUsingSemiFinished() {
+            console.warn('updateFinishedProductsUsingSemiFinished已废弃，请使用forceRecalculateAllPrices');
+            forceRecalculateAllPrices();
+        }
+
+        // ==================== 商品汇总模块 ====================
+
+        // 初始化商品汇总模块
+        function initProductSummary() {
+            console.log('初始化商品汇总模块...');
+            
+            // 渲染商品汇总表格
+            renderProductSummaryTable();
+            
+            // 绑定搜索事件
+            const productSummarySearch = document.getElementById('productSummarySearch');
+            if (productSummarySearch) {
+                productSummarySearch.addEventListener('input', function() {
+                    handleProductSummarySearch(this.value);
+                });
+            }
+            
+            // 渲染时间管理表单
+            renderProductTimeManagement();
+        }
+
+        // 渲染商品汇总表格
+        function renderProductSummaryTable(filter = '') {
+            const tableBody = document.getElementById('productSummaryTable');
+            const tableFooter = document.getElementById('productSummaryFooter');
+            const emptyState = document.getElementById('productSummaryEmpty');
+            
+            if (!tableBody || !tableFooter || !emptyState) {
+                console.error('找不到商品汇总表格元素');
+                return;
+            }
+            
+            // 过滤商品
+            const filteredProducts = filter 
+                ? products.filter(product => product.name.toLowerCase().includes(filter.toLowerCase()))
+                : products;
+            
+            // 显示空状态或表格
+            if (filteredProducts.length === 0) {
+                tableBody.innerHTML = '';
+                tableFooter.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+            
+            // 计算平均值
+            let totalCost = 0;
+            let totalActualPrice = 0;
+            let totalProfitMargin = 0;
+            let productCount = 0;
+            
+            filteredProducts.forEach(product => {
+                totalCost += product.totalCost;
+                if (product.actualPrice > 0) {
+                    totalActualPrice += product.actualPrice;
+                    totalProfitMargin += product.profitMargin || 0;
+                    productCount++;
+                }
+            });
+            
+            const avgCost = productCount > 0 ? totalCost / productCount : 0;
+            const avgActualPrice = productCount > 0 ? totalActualPrice / productCount : 0;
+            const avgProfitMargin = productCount > 0 ? totalProfitMargin / productCount : 0;
+            
+            // 渲染表格内容
+            tableBody.innerHTML = filteredProducts.map(product => {
+                const 上架时间 = product.上架时间 ? new Date(product.上架时间).toLocaleDateString() : '-';
+                const 下架时间 = product.下架时间 ? new Date(product.下架时间).toLocaleDateString() : '-';
+                const 售卖时长 = calculateSellingDuration(product.上架时间, product.下架时间);
+                
+                return `
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="table-cell font-medium">${product.name}</td>
+                        <td class="table-cell">${product.totalCost.toFixed(2)}</td>
+                        <td class="table-cell">${product.actualPrice ? product.actualPrice.toFixed(2) : '-'}</td>
+                        <td class="table-cell">${product.profitMargin ? product.profitMargin.toFixed(2) : '-'}</td>
+                        <td class="table-cell">${上架时间}</td>
+                        <td class="table-cell">${下架时间}</td>
+                        <td class="table-cell">${售卖时长}</td>
+                        <td class="table-cell">
+                            <button class="text-blue-600 hover:text-blue-800" onclick="window.editProductTime(${product.id})">
+                                <i class="fa fa-calendar"></i> 设置时间
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // 渲染汇总行
+            tableFooter.innerHTML = `
+                <tr>
+                    <td class="table-cell font-semibold">平均值</td>
+                    <td class="table-cell font-semibold">${avgCost.toFixed(2)}</td>
+                    <td class="table-cell font-semibold">${avgActualPrice.toFixed(2)}</td>
+                    <td class="table-cell font-semibold">${avgProfitMargin.toFixed(2)}</td>
+                    <td class="table-cell" colspan="4">-</td>
+                </tr>
+            `;
+            tableFooter.classList.remove('hidden');
+        }
+
+        // 计算售卖时长
+        function calculateSellingDuration(startDate, endDate) {
+            if (!startDate) return '-';
+            
+            const start = new Date(startDate);
+            const end = endDate ? new Date(endDate) : new Date();
+            
+            const diffTime = Math.abs(end - start);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return `${diffDays} 天`;
+        }
+
+        // 渲染时间管理表单
+        function renderProductTimeManagement() {
+            const container = document.getElementById('productTimeManagement');
+            if (!container) return;
+            
+            if (products.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center">暂无商品数据</p>';
+                return;
+            }
+            
+            container.innerHTML = products.map(product => {
+                const 上架时间 = product.上架时间 || '';
+                const 下架时间 = product.下架时间 || '';
+                
+                return `
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-semibold">${product.name}</h3>
+                            <span class="text-sm text-gray-600">成本: ${product.totalCost.toFixed(2)}元</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">上架时间</label>
+                                <input type="date" id="上架时间_${product.id}" value="${上架时间}" 
+                                       class="input-field" onchange="window.updateProductTime(${product.id})">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">下架时间</label>
+                                <input type="date" id="下架时间_${product.id}" value="${下架时间}" 
+                                       class="input-field" onchange="window.updateProductTime(${product.id})">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 全局函数 - 更新商品时间
+        window.updateProductTime = function(productId) {
+            const 上架时间 = document.getElementById(`上架时间_${productId}`).value;
+            const 下架时间 = document.getElementById(`下架时间_${productId}`).value;
+            
+            const productIndex = products.findIndex(p => p.id === productId);
+            if (productIndex !== -1) {
+                products[productIndex].上架时间 = 上架时间;
+                products[productIndex].下架时间 = 下架时间;
+                
+                localStorage.setItem('products', JSON.stringify(products));
+                
+                // 如果当前在商品汇总标签页，重新渲染表格
+                const currentTab = document.querySelector('#tabNav button.tab-active');
+                if (currentTab && currentTab.dataset.tab === 'productSummary') {
+                    renderProductSummaryTable();
+                }
+            }
+        };
+
+        // 全局函数 - 编辑商品时间
+        window.editProductTime = function(productId) {
+            console.log('编辑商品时间:', productId);
+            // 滚动到对应的时间管理表单
+            const timeManagementSection = document.getElementById('productTimeManagement');
+            if (timeManagementSection) {
+                timeManagementSection.scrollIntoView({ behavior: 'smooth' });
+                
+                // 聚焦到对应的输入框
+                setTimeout(() => {
+                    const 上架时间Input = document.getElementById(`上架时间_${productId}`);
+                    if (上架时间Input) {
+                        上架时间Input.focus();
+                        上架时间Input.select();
+                    }
+                }, 300);
+            }
+        };
+
+        // 处理商品汇总搜索
+        function handleProductSummarySearch(filter) {
+            renderProductSummaryTable(filter);
+        }
+    </script>
+</body>
+</html>
